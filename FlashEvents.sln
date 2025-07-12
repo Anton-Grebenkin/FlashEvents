@@ -7,7 +7,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FlashEvents.Tests", "FlashE
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FlashEvents", "FlashEvents\FlashEvents.csproj", "{BE75B8B7-36F7-1CDF-A4D3-2800DB570B60}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FluentEvents.BenchMarks", "FluentEvents.BenchMarks\FluentEvents.BenchMarks.csproj", "{88C9E77B-9E9F-4CC6-9FAA-591BF80DE5B3}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FluentEvents.Benchmarks", "FluentEvents.BenchMarks\FluentEvents.Benchmarks.csproj", "{88C9E77B-9E9F-4CC6-9FAA-591BF80DE5B3}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

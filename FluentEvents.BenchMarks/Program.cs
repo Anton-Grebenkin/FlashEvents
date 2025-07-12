@@ -1,18 +1,13 @@
 ﻿using BenchmarkDotNet.Attributes;
-using BenchmarkDotNet.Configs;
 using BenchmarkDotNet.Running;
 using FlashEvents;
 using FlashEvents.Abstractions;
 using MediatR;
 using MediatR.NotificationPublishers;
 using Microsoft.Extensions.DependencyInjection;
-using System;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace PublisherBenchmark
 {
-    // простой event
     public class TestEvent : IEvent, INotification { }
 
     public class CustomHandler : IEventHandler<TestEvent>
@@ -70,7 +65,7 @@ namespace PublisherBenchmark
         }
 
         [Benchmark(Baseline = true)]
-        public async Task Custom_Publish()
+        public async Task FluentEvents_Publish()
         {
             await _customPublisher.PublishAsync(new TestEvent());
         }
