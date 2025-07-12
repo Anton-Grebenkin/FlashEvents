@@ -1,19 +1,27 @@
-<h1>FlashEvents</h1>
-<p><strong>FlashEvents</strong> is a high-performance, in-memory event publishing library for .NET designed with simplicity and speed in mind. It enables a robust publish-subscribe pattern where event handlers are executed <strong>in parallel</strong>, and each handler runs within its own isolated <strong>Dependency Injection scope</strong>.</p>
-<p>This approach ensures that handlers do not interfere with each other, making it ideal for applications where handlers have their own unit of work, such as interacting with a database context (<code>DbContext</code>) or managing other scoped services.</p>
-<h2>Key Features</h2>
-<ul>
-<li>🚀 <strong>Blazing Fast Performance</strong>: Optimized for low-latency and minimal memory allocations. See benchmarks below.</li>
-<li>⚡ <strong>Parallel Execution</strong>: Automatically runs all handlers for a given event concurrently using <code>Task.WhenAll</code>, maximizing throughput.</li>
-<li>🛡️ <strong>Scoped Handler Isolation</strong>: Each event handler is resolved and executed in its own <code>IServiceScope</code>. This prevents issues with shared state and transient service lifetimes (e.g., <code>DbContext</code> instances).</li>
-<li>🔧 <strong>Simple &amp; Fluent API</strong>: Easy to set up and use with clean dependency injection extensions.</li>
-<li>🔍 <strong>Automatic Handler Discovery</strong>: Register all your event handlers from an assembly with a single line of code.</li>
-</ul>
-<h2>Getting Started</h2>
-<p>Using FlashEvents is straightforward. Follow these steps to integrate it into your application.</p>
-<h3>1. Define an Event</h3>
-<p>An event is a simple class or record that implements the <code>IEvent</code> marker interface.</p>
-<pre><code class="language-csharp">// Define your event contracts in a shared library
+# FlashEvents
+
+**FlashEvents** is a high-performance, in-memory event publishing library for .NET designed with simplicity and speed in mind. It enables a robust publish-subscribe pattern where event handlers are executed **in parallel**, and each handler runs within its own isolated **Dependency Injection scope**.
+
+This approach ensures that handlers do not interfere with each other, making it ideal for applications where handlers have their own unit of work, such as interacting with a database context (`DbContext`) or managing other scoped services.
+
+## Key Features
+
+*   🚀 **Blazing Fast Performance**: Optimized for low-latency and minimal memory allocations. See benchmarks below.
+*   ⚡ **Parallel Execution**: Automatically runs all handlers for a given event concurrently using `Task.WhenAll`, maximizing throughput.
+*   🛡️ **Scoped Handler Isolation**: Each event handler is resolved and executed in its own `IServiceScope`. This prevents issues with shared state and transient service lifetimes (e.g., `DbContext` instances).
+*   🔧 **Simple & Fluent API**: Easy to set up and use with clean dependency injection extensions.
+*   🔍 **Automatic Handler Discovery**: Register all your event handlers from an assembly with a single line of code.
+
+## Getting Started
+
+Using FlashEvents is straightforward. Follow these steps to integrate it into your application.
+
+### 1\. Define an Event
+
+An event is a simple class or record that implements the `IEvent` marker interface.
+
+```csharp
+// Define your event contracts in a shared library
 using FlashEvents.Abstractions;
 
 public record OrderCreatedEvent(int OrderId, string CustomerEmail) : IEvent;
@@ -23,24 +31,28 @@ namespace FlashEvents.Abstractions
 {
     public interface IEvent { }
 
-    public interface IEventHandler&lt;in TEvent&gt; where TEvent : IEvent
+    public interface IEventHandler<in TEvent> where TEvent : IEvent
     {
         Task Handle(TEvent @event, CancellationToken ct);
     }
 }
-</code></pre>
-<h3>2. Create Event Handlers</h3>
-<p>Create one or more handlers for your event. Each handler must implement <code>IEventHandler&lt;TEvent&gt;</code>.</p>
-<pre><code class="language-csharp">using FlashEvents.Abstractions;
+```
+
+### 2\. Create Event Handlers
+
+Create one or more handlers for your event. Each handler must implement `IEventHandler<TEvent>`.
+
+```csharp
+using FlashEvents.Abstractions;
 using Microsoft.Extensions.Logging;
 
 // Handler 1: Sends a welcome email
-public class SendWelcomeEmailHandler : IEventHandler&lt;OrderCreatedEvent&gt;
+public class SendWelcomeEmailHandler : IEventHandler<OrderCreatedEvent>
 {
     private readonly IEmailService _emailService;
-    private readonly ILogger&lt;SendWelcomeEmailHandler&gt; _logger;
+    private readonly ILogger<SendWelcomeEmailHandler> _logger;
 
-    public SendWelcomeEmailHandler(IEmailService emailService, ILogger&lt;SendWelcomeEmailHandler&gt; logger)
+    public SendWelcomeEmailHandler(IEmailService emailService, ILogger<SendWelcomeEmailHandler> logger)
     {
         _emailService = emailService;
         _logger = logger;
@@ -55,12 +67,12 @@ public class SendWelcomeEmailHandler : IEventHandler&lt;OrderCreatedEvent&gt;
 }
 
 // Handler 2: Updates analytics
-public class UpdateAnalyticsHandler : IEventHandler&lt;OrderCreatedEvent&gt;
+public class UpdateAnalyticsHandler : IEventHandler<OrderCreatedEvent>
 {
     private readonly IAnalyticsService _analyticsService;
-    private readonly ILogger&lt;UpdateAnalyticsHandler&gt; _logger;
+    private readonly ILogger<UpdateAnalyticsHandler> _logger;
 
-    public UpdateAnalyticsHandler(IAnalyticsService analyticsService, ILogger&lt;UpdateAnalyticsHandler&gt; logger)
+    public UpdateAnalyticsHandler(IAnalyticsService analyticsService, ILogger<UpdateAnalyticsHandler> logger)
     {
         _analyticsService = analyticsService;
         _logger = logger;
@@ -73,10 +85,14 @@ public class UpdateAnalyticsHandler : IEventHandler&lt;OrderCreatedEvent&gt;
         _logger.LogInformation("Analytics updated for order {OrderId}.", @event.OrderId);
     }
 }
-</code></pre>
-<h3>3. Configure Dependency Injection</h3>
-<p>In your <code>Program.cs</code> or <code>Startup.cs</code>, register the event publisher and your handlers.</p>
-<pre><code class="language-csharp">using FlashEvents;
+```
+
+### 3\. Configure Dependency Injection
+
+In your `Program.cs` or `Startup.cs`, register the event publisher and your handlers.
+
+```csharp
+using FlashEvents;
 using System.Reflection;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -88,19 +104,23 @@ builder.Services.AddEventPublisher();
 builder.Services.AddEventHandlersFromAssembly(Assembly.GetExecutingAssembly());
 
 // You can also register handlers manually
-// builder.Services.AddEventHandler&lt;IEventHandler&lt;OrderCreatedEvent&gt;, SendWelcomeEmailHandler&gt;();
+// builder.Services.AddEventHandler<IEventHandler<OrderCreatedEvent>, SendWelcomeEmailHandler>();
 
 // Register other application services
-builder.Services.AddTransient&lt;IEmailService, EmailService&gt;();
-builder.Services.AddScoped&lt;IAnalyticsService, AnalyticsService&gt;(); // Example of a scoped service
+builder.Services.AddTransient<IEmailService, EmailService>();
+builder.Services.AddScoped<IAnalyticsService, AnalyticsService>(); // Example of a scoped service
 
 var app = builder.Build();
 
 // ...
-</code></pre>
-<h3>4. Publish an Event</h3>
-<p>Inject <code>IEventPublisher</code> into your services and call <code>PublishAsync</code> to trigger all registered handlers.</p>
-<pre><code class="language-csharp">using FlashEvents.Abstractions;
+```
+
+### 4\. Publish an Event
+
+Inject `IEventPublisher` into your services and call `PublishAsync` to trigger all registered handlers.
+
+```csharp
+using FlashEvents.Abstractions;
 using Microsoft.AspNetCore.Mvc;
 
 [ApiController]
@@ -115,7 +135,7 @@ public class OrdersController : ControllerBase
     }
 
     [HttpPost]
-    public async Task&lt;IActionResult&gt; CreateOrder()
+    public async Task<IActionResult> CreateOrder()
     {
         // ... logic to create an order ...
         int newOrderId = 123;
@@ -130,144 +150,75 @@ public class OrdersController : ControllerBase
         return Ok("Order created and events are being handled.");
     }
 }
-</code></pre>
-<h2>⚠️ Important Note: Handler Caching</h2>
-<p>For maximum performance, <strong>FlashEvents caches the list of handler types (<code>Type[]</code>) for each event type (<code>IEvent</code>) upon its first publication</strong>.</p>
-<p>This means that any changes to handler registrations in the DI container <em>after an event of that type has already been published</em> will not be recognized. The handler cache <strong>cannot be reset</strong> during the application's runtime.</p>
-<p><strong>All event handler registrations must be configured at application startup.</strong></p>
-<h2>How It Works</h2>
-<p>FlashEvents achieves its performance and isolation through a simple but effective mechanism:</p>
-<ol>
-<li>When <code>PublishAsync</code> is called for an event type for the first time, it resolves all registered <code>IEventHandler&lt;TEvent&gt;</code> services from the DI container.</li>
-<li>The concrete types of these handlers are stored in a static, thread-safe cache (<code>LazyInitializer</code>) associated with the event type.</li>
-<li>On every publish call (including the first), it iterates through the cached handler types.</li>
-<li>For each handler type, it creates a new <code>AsyncServiceScope</code> from the root <code>IServiceProvider</code>.</li>
-<li>It resolves the handler service within this new scope and executes its <code>Handle</code> method.</li>
-<li><code>Task.WhenAll</code> is used to await all handler tasks, ensuring they run concurrently.</li>
-<li>If any handler throws an exception, all exceptions are collected into a single <code>AggregateException</code>.</li>
-</ol>
-<p>This design guarantees that each handler gets a fresh set of scoped dependencies, providing perfect isolation with minimal overhead.</p>
-<h2>Benchmarks</h2>
-<p>The following benchmarks compare <code>FlashEvents</code> with <code>MediatR v12.5.0</code> under different scenarios.</p>
-<p><strong>System Configuration:</strong></p>
-<ul>
-<li>BenchmarkDotNet v0.15.2, Windows 11 (10.0.22631.5335)</li>
-<li>13th Gen Intel Core i5-13400F 2.50GHz, 1 CPU, 16 logical and 10 physical cores</li>
-<li>.NET SDK 9.0.302, .NET 8.0.18</li>
-</ul>
-<hr>
-<h3>Scenario 1: Single Handler (<code>TaskWhenAllPublisher in MediatR</code>)</h3>
-<p>This test measures the performance of publishing an event that is handled by a single handler.</p>
-<table>
-<thead>
-<tr>
-<th align="left">Method</th>
-<th align="right">Mean</th>
-<th align="right">Error</th>
-<th align="right">StdDev</th>
-<th align="right">Ratio</th>
-<th align="right">Gen0</th>
-<th align="right">Allocated</th>
-<th align="right">Alloc Ratio</th>
-</tr>
-</thead>
-<tbody><tr>
-<td align="left"><strong>FlashEvents_Publish</strong></td>
-<td align="right"><strong>91.28 ns</strong></td>
-<td align="right"><strong>1.149 ns</strong></td>
-<td align="right"><strong>1.075 ns</strong></td>
-<td align="right"><strong>1.00</strong></td>
-<td align="right"><strong>0.0168</strong></td>
-<td align="right"><strong>176 B</strong></td>
-<td align="right"><strong>1.00</strong></td>
-</tr>
-<tr>
-<td align="left">Mediatr_Publish</td>
-<td align="right">141.19 ns</td>
-<td align="right">1.114 ns</td>
-<td align="right">0.988 ns</td>
-<td align="right">1.55</td>
-<td align="right">0.0634</td>
-<td align="right">664 B</td>
-<td align="right">3.77</td>
-</tr>
-</tbody></table>
-<p><strong>Result:</strong> In a single-handler scenario, FlashEvents is approximately <strong>1.55x faster</strong> and allocates <strong>3.77x less memory</strong> than MediatR using its parallel publisher.</p>
-<hr>
-<h3>Scenario 2: Single Handler(<code>ForeachAwaitPublisher in MediatR</code>)</h3>
-<p>This test compares against MediatR's default sequential publisher.</p>
-<table>
-<thead>
-<tr>
-<th align="left">Method</th>
-<th align="right">Mean</th>
-<th align="right">Error</th>
-<th align="right">StdDev</th>
-<th align="right">Ratio</th>
-<th align="right">Gen0</th>
-<th align="right">Allocated</th>
-<th align="right">Alloc Ratio</th>
-</tr>
-</thead>
-<tbody><tr>
-<td align="left"><strong>FlashEvents_Publish</strong></td>
-<td align="right"><strong>89.94 ns</strong></td>
-<td align="right"><strong>1.673 ns</strong></td>
-<td align="right"><strong>1.644 ns</strong></td>
-<td align="right"><strong>1.00</strong></td>
-<td align="right"><strong>0.0168</strong></td>
-<td align="right"><strong>176 B</strong></td>
-<td align="right"><strong>1.00</strong></td>
-</tr>
-<tr>
-<td align="left">Mediatr_Publish</td>
-<td align="right">84.09 ns</td>
-<td align="right">0.739 ns</td>
-<td align="right">0.691 ns</td>
-<td align="right">0.94</td>
-<td align="right">0.0298</td>
-<td align="right">312 B</td>
-<td align="right">1.77</td>
-</tr>
-</tbody></table>
-<p><strong>Result:</strong> MediatR's sequential publisher is slightly faster for a single handler, but FlashEvents remains significantly more memory-efficient, allocating <strong>1.77x less memory</strong>.</p>
-<hr>
-<h3>Scenario 3: Two Handlers (<code>TaskWhenAllPublisher in MediatR</code>)</h3>
-<p>This test measures parallel execution with two handlers for the same event.</p>
-<table>
-<thead>
-<tr>
-<th align="left">Method</th>
-<th align="right">Mean</th>
-<th align="right">Error</th>
-<th align="right">StdDev</th>
-<th align="right">Ratio</th>
-<th align="right">Gen0</th>
-<th align="right">Allocated</th>
-<th align="right">Alloc Ratio</th>
-</tr>
-</thead>
-<tbody><tr>
-<td align="left"><strong>FlashEvents_Publish</strong></td>
-<td align="right"><strong>269.3 ns</strong></td>
-<td align="right"><strong>3.34 ns</strong></td>
-<td align="right"><strong>2.79 ns</strong></td>
-<td align="right"><strong>1.00</strong></td>
-<td align="right"><strong>0.0677</strong></td>
-<td align="right"><strong>712 B</strong></td>
-<td align="right"><strong>1.00</strong></td>
-</tr>
-<tr>
-<td align="left">Mediatr_Publish</td>
-<td align="right">171.4 ns</td>
-<td align="right">0.95 ns</td>
-<td align="right">0.79 ns</td>
-<td align="right">0.64</td>
-<td align="right">0.0787</td>
-<td align="right">824 B</td>
-<td align="right">1.16</td>
-</tr>
-</tbody></table>
-<p><strong>Result:</strong> In the multi-handler scenario, MediatR's publisher shows a faster execution time. However, FlashEvents provides built-in scoped parallelism by design without any extra configuration and maintains a slight edge in memory efficiency, allocating <strong>1.16x less memory</strong>. The primary benefit of FlashEvents is its architectural simplicity for achieving isolated, parallel execution.</p>
-<h2>License</h2>
-<p>This project is licensed under the MIT License. See the <code>LICENSE</code> file for details.</p>
+```
+
+## ⚠️ Important Note: Handler Caching
+
+For maximum performance, **FlashEvents caches the list of handler types (`Type[]`) for each event type (`IEvent`) upon its first publication**.
+
+This means that any changes to handler registrations in the DI container _after an event of that type has already been published_ will not be recognized. The handler cache **cannot be reset** during the application's runtime.
+
+**All event handler registrations must be configured at application startup.**
+
+## How It Works
+
+FlashEvents achieves its performance and isolation through a simple but effective mechanism:
+
+1.  When `PublishAsync` is called for an event type for the first time, it resolves all registered `IEventHandler<TEvent>` services from the DI container.
+2.  The concrete types of these handlers are stored in a static, thread-safe cache (`LazyInitializer`) associated with the event type.
+3.  On every publish call (including the first), it iterates through the cached handler types.
+4.  For each handler type, it creates a new `AsyncServiceScope` from the root `IServiceProvider`.
+5.  It resolves the handler service within this new scope and executes its `Handle` method.
+6.  `Task.WhenAll` is used to await all handler tasks, ensuring they run concurrently.
+7.  If any handler throws an exception, all exceptions are collected into a single `AggregateException`.
+
+This design guarantees that each handler gets a fresh set of scoped dependencies, providing perfect isolation with minimal overhead.
+
+## Benchmarks
+
+The following benchmarks compare `FlashEvents` with `MediatR v12.5.0` under different scenarios.
+
+**System Configuration:**
+
+*   BenchmarkDotNet v0.15.2, Windows 11 (10.0.22631.5335)
+*   13th Gen Intel Core i5-13400F 2.50GHz, 1 CPU, 16 logical and 10 physical cores
+*   .NET SDK 9.0.302, .NET 8.0.18
+
+- - -
+
+### Scenario 1: Single Handler (`TaskWhenAllPublisher in MediatR`)
+
+This test measures the performance of publishing an event that is handled by a single handler.
+
+| Method | Mean | Error | StdDev | Ratio | Gen0 | Allocated | Alloc Ratio |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| **FlashEvents\_Publish** | **91.28 ns** | **1.149 ns** | **1.075 ns** | **1.00** | **0.0168** | **176 B** | **1.00** |
+| MediatR\_Publish | 141.19 ns | 1.114 ns | 0.988 ns | 1.55 | 0.0634 | 664 B | 3.77 |
+
+**Result:** In a single-handler scenario, FlashEvents is approximately **1.55× faster** and allocates **3.77× less memory** than MediatR using its parallel publisher.
+
+- - -
+
+### Scenario 2: Single Handler (`ForeachAwaitPublisher in MediatR`)
+
+This test compares against MediatR’s default sequential publisher.
+
+| Method | Mean | Error | StdDev | Ratio | Gen0 | Allocated | Alloc Ratio |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| **FlashEvents\_Publish** | **89.94 ns** | **1.673 ns** | **1.644 ns** | **1.00** | **0.0168** | **176 B** | **1.00** |
+| MediatR\_Publish | 84.09 ns | 0.739 ns | 0.691 ns | 0.94 | 0.0298 | 312 B | 1.77 |
+
+**Result:** MediatR’s sequential publisher is slightly faster for a single handler, but FlashEvents remains significantly more memory-efficient, allocating **1.77× less memory**.
+
+- - -
+
+### Scenario 3: Two Handlers (`TaskWhenAllPublisher in MediatR`)
+
+This test measures parallel execution with two handlers for the same event.
+
+| Method | Mean | Error | StdDev | Ratio | Gen0 | Allocated | Alloc Ratio |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| **FlashEvents\_Publish** | **269.3 ns** | **3.34 ns** | **2.79 ns** | **1.00** | **0.0677** | **712 B** | **1.00** |
+| MediatR\_Publish | 171.4 ns | 0.95 ns | 0.79 ns | 0.64 | 0.0787 | 824 B | 1.16 |
+
+**Result:** In the multi-handler scenario, MediatR’s publisher shows faster execution time. However, FlashEvents provides built-in scoped parallelism by design without extra configuration and maintains a slight edge in memory efficiency, allocating **1.16× less memory**. The primary benefit of FlashEvents is its architectural simplicity for achieving isolated, parallel execution.
