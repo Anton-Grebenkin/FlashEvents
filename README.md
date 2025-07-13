@@ -27,17 +27,6 @@ An event is a simple class or record that implements the `IEvent` marker interfa
 using FlashEvents.Abstractions;
 
 public record OrderCreatedEvent(int OrderId, string CustomerEmail) : IEvent;
-
-// Abstractions (put these in a separate assembly if needed)
-namespace FlashEvents.Abstractions
-{
-    public interface IEvent { }
-
-    public interface IEventHandler<in TEvent> where TEvent : IEvent
-    {
-        Task Handle(TEvent @event, CancellationToken ct);
-    }
-}
 ```
 
 ### 2\. Create Event Handlers
