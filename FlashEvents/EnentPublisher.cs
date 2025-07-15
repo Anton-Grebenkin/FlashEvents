@@ -7,11 +7,14 @@ namespace FlashEvents
     {
         private readonly IServiceProvider _serviceProvider;
         private readonly ConcurrentDictionary<Type, IHandlerWrapper> _notificationHandlers = new();
+        private readonly IEventHandlerRegistry _registry;
 
         public EventPublisher(
-            IServiceProvider serviceProvider)
+            IServiceProvider serviceProvider,
+            IEventHandlerRegistry registry)
         {
             _serviceProvider = serviceProvider;
+            _registry = registry;
         }
 
         public async Task PublishAsync<T>(T notification, CancellationToken ct = default) where T : class, IEvent
@@ -23,7 +26,7 @@ namespace FlashEvents
                 return (IHandlerWrapper)wrapper;
             });
 
-            await handlerWrapper.Handle(notification, _serviceProvider, ct);
+            await handlerWrapper.Handle(notification, _serviceProvider, _registry, ct);
         }
     }
 }

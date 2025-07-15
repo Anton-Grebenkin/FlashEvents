@@ -1,7 +1,8 @@
-﻿namespace FlashEvents.Abstractions
+﻿
+namespace FlashEvents.Abstractions
 {
     internal interface IHandlerWrapper
     {
-        Task Handle(IEvent @event, IServiceProvider serviceFactory, CancellationToken ct);
+        Task Handle(IEvent @event, IServiceProvider serviceFactory, IEventHandlerRegistry registry, CancellationToken ct);
     }
 }

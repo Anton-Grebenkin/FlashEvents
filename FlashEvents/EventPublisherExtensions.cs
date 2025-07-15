@@ -8,28 +8,22 @@ namespace FlashEvents
     {
         public static IServiceCollection AddEventHandlersFromAssembly(this IServiceCollection services, Assembly assembly)
         {
-            var multiOpenInterface = typeof(IEventHandler<>);
+            var registry = EventHandlerRegistry.GetOrCreateRegistry(services);
 
-            var handlerTypes = assembly.GetExportedTypes()
-                .Where(t =>
-                    !t.IsAbstract &&
-                    !t.IsInterface &&
-                    t.GetInterfaces().Any(i =>
-                        i.IsGenericType &&
-                        i.GetGenericTypeDefinition() == multiOpenInterface))
-                .ToList();
+            var handlerTypes = assembly.GetTypes()
+                .Where(t => t.IsClass && !t.IsAbstract && t.GetInterfaces().Any(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IEventHandler<>)));
 
             foreach (var handlerType in handlerTypes)
             {
-                var handlerInterfaces = handlerType.GetInterfaces()
-                    .Where(i =>
-                        i.IsGenericType &&
-                        i.GetGenericTypeDefinition() == multiOpenInterface);
+                var eventHandlerInterfaces = handlerType.GetInterfaces()
+                    .Where(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IEventHandler<>));
 
-                foreach (var handlerInterface in handlerInterfaces)
+                foreach (var interfaceType in eventHandlerInterfaces)
                 {
                     services.AddTransient(handlerType);
-                    services.AddTransient(handlerInterface, sp => sp.GetRequiredService(handlerType));
+
+                    var eventType = interfaceType.GetGenericArguments()[0];
+                    registry.RegisterByType(eventType, handlerType);
                 }
             }
 
@@ -38,17 +32,25 @@ namespace FlashEvents
 
         public static IServiceCollection AddEventPublisher(this IServiceCollection services)
         {
+            EventHandlerRegistry.GetOrCreateRegistry(services);
             services.AddSingleton<IEventPublisher, EventPublisher>();
 
             return services;
         }
 
         public static IServiceCollection AddEventHandler<TInterface, THandler>(this IServiceCollection services)
-            where TInterface : class, IEventHandler
+            where TInterface : IEventHandler
             where THandler : class, TInterface
         {
-            services.AddTransient(typeof(THandler));
-            services.AddTransient(typeof(TInterface), sp => sp.GetRequiredService(typeof(THandler)));
+            var handlerType = typeof(THandler);
+
+            var eventType = typeof(TInterface).GetGenericArguments()[0];
+
+            services.AddTransient<THandler>();
+
+            var registry = EventHandlerRegistry.GetOrCreateRegistry(services);
+
+            registry.RegisterByType(eventType, handlerType);
 
             return services;
         }

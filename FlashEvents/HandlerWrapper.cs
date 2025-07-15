@@ -5,31 +5,12 @@ namespace FlashEvents
 {
     internal class HandlerWrapper<TEvent> : IHandlerWrapper where TEvent : IEvent
     {
-        private Type[]? _cachedHandlerTypes;
-        public async Task Handle(IEvent @event, IServiceProvider serviceProvider, CancellationToken ct)
+        public async Task Handle(IEvent @event, IServiceProvider serviceProvider, IEventHandlerRegistry registry, CancellationToken ct)
         {
-            var handlerTypes = LazyInitializer.EnsureInitialized(
-                ref _cachedHandlerTypes,
-                () => serviceProvider.GetServices<IEventHandler<TEvent>>()
-                                    .Select(h => h.GetType())
-                                    .ToArray()
-            );
+            var handlerTypes = registry.GetHandlerTypesFor<TEvent>();
 
-            if (handlerTypes.Length == 0)
+            if (!handlerTypes.Any())
                 return;
-
-            if (handlerTypes.Length == 1)
-            {
-                try
-                {
-                    await serviceProvider.GetRequiredService<IEventHandler<TEvent>>().Handle((TEvent)@event, ct);
-                    return;
-                }
-                catch (Exception ex)
-                {
-                    throw new AggregateException(ex);
-                }
-            }
 
             var all = Task.WhenAll(handlerTypes.Select(
                 handlerType => ProcessHandlerAsync(serviceProvider, handlerType, @event, ct))

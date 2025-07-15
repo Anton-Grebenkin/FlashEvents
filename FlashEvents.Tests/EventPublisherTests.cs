@@ -23,8 +23,13 @@ namespace FlashEvents.Tests
             services.AddEventPublisher();
             services.AddEventHandler<IEventHandler<AnotherTestEvent>, AnotherTestEventHandler>();
 
+            services.AddScoped<IScopeService, ScopeService>();
+
             using var serviceProvider = services.BuildServiceProvider();
-            var publisher = serviceProvider.GetRequiredService<IEventPublisher>();
+
+            using var scope = serviceProvider.CreateScope();
+
+            var publisher = scope.ServiceProvider.GetRequiredService<IEventPublisher>();
 
             var testEvent = new AnotherTestEvent();
 
@@ -46,7 +51,10 @@ namespace FlashEvents.Tests
             services.AddEventHandler<IEventHandler<TestEvent>, SecondTestEventHandler>();
 
             using var serviceProvider = services.BuildServiceProvider();
-            var publisher = serviceProvider.GetRequiredService<IEventPublisher>();
+
+            using var scope = serviceProvider.CreateScope();
+
+            var publisher = scope.ServiceProvider.GetRequiredService<IEventPublisher>();
 
             var testEvent = new TestEvent();
 
@@ -72,7 +80,10 @@ namespace FlashEvents.Tests
             services.AddEventHandler<IEventHandler<TestEvent>, FailingTestEventHandler>();
 
             using var serviceProvider = services.BuildServiceProvider();
-            var publisher = serviceProvider.GetRequiredService<IEventPublisher>();
+
+            using var scope = serviceProvider.CreateScope();
+
+            var publisher = scope.ServiceProvider.GetRequiredService<IEventPublisher>();
 
             var testEvent = new TestEvent();
 
@@ -97,7 +108,10 @@ namespace FlashEvents.Tests
             services.AddEventHandler<IEventHandler<TestEvent>, TestEventHandler>();
 
             using var serviceProvider = services.BuildServiceProvider();
-            var publisher = serviceProvider.GetRequiredService<IEventPublisher>();
+
+            using var scope = serviceProvider.CreateScope();
+            
+            var publisher = scope.ServiceProvider.GetRequiredService<IEventPublisher>();
 
             var testEvent = new TestEvent();
 
@@ -119,7 +133,10 @@ namespace FlashEvents.Tests
             services.AddEventPublisher();
 
             using var serviceProvider = services.BuildServiceProvider();
-            var publisher = serviceProvider.GetRequiredService<IEventPublisher>();
+
+            using var scope = serviceProvider.CreateScope();
+
+            var publisher = scope.ServiceProvider.GetRequiredService<IEventPublisher>();
 
             var unhandledEvent = new UnhandledEvent();
 
@@ -139,7 +156,10 @@ namespace FlashEvents.Tests
             services.AddEventHandler<IEventHandler<TestEvent>, CancellableEventHandler>();
 
             using var serviceProvider = services.BuildServiceProvider();
-            var publisher = serviceProvider.GetRequiredService<IEventPublisher>();
+
+            using var scope = serviceProvider.CreateScope();
+
+            var publisher = scope.ServiceProvider.GetRequiredService<IEventPublisher>();
 
             var testEvent = new TestEvent();
             var cts = new CancellationTokenSource();
@@ -199,6 +219,11 @@ namespace FlashEvents.Tests
 
     public class AnotherTestEventHandler : IEventHandler<AnotherTestEvent>
     {
+        public AnotherTestEventHandler(IScopeService scopeService)
+        {
+
+        }
+
         public static bool WasCalled { get; private set; }
 
         public static void Reset() => WasCalled = false;
@@ -208,6 +233,16 @@ namespace FlashEvents.Tests
             WasCalled = true;
             return Task.CompletedTask;
         }
+    }
+
+    public class ScopeService : IScopeService
+    {
+
+    }
+
+    public interface IScopeService
+    {
+
     }
 
     public class CancellableEventHandler : IEventHandler<TestEvent>
