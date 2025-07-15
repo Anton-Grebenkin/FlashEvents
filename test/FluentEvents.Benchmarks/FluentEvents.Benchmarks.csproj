@@ -13,7 +13,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\FlashEvents\FlashEvents.csproj" />
+    <ProjectReference Include="..\..\src\FlashEvents\FlashEvents.csproj" />
   </ItemGroup>
 
 </Project>
