@@ -51,6 +51,7 @@ namespace PublisherBenchmark
             customServices.AddEventHandler<IEventHandler<TestEvent>, CustomHandler>();
             customServices.AddEventHandler<IEventHandler<TestEvent>, CustomHandler2>();
             customServices.AddEventPublisher();
+
             _customServices = customServices.BuildServiceProvider();
             _customPublisher = _customServices.GetRequiredService<IEventPublisher>();
 
