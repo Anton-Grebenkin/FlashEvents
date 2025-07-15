@@ -151,20 +151,6 @@ This means that any changes to handler registrations in the DI container _after 
 
 **All event handler registrations must be configured at application startup.**
 
-## How It Works
-
-FlashEvents achieves its performance and isolation through a simple but effective mechanism:
-
-1.  When `PublishAsync` is called for an event type for the first time, it resolves all registered `IEventHandler<TEvent>` services from the DI container.
-2.  The concrete types of these handlers are stored in a static, thread-safe cache (`LazyInitializer`) associated with the event type.
-3.  On every publish call (including the first), it iterates through the cached handler types.
-4.  For each handler type, it creates a new `AsyncServiceScope` from the root `IServiceProvider`.
-5.  It resolves the handler service within this new scope and executes its `Handle` method.
-6.  `Task.WhenAll` is used to await all handler tasks, ensuring they run concurrently.
-7.  If any handler throws an exception, all exceptions are collected into a single `AggregateException`.
-
-This design guarantees that each handler gets a fresh set of scoped dependencies, providing perfect isolation with minimal overhead.
-
 ## Benchmarks
 
 The following benchmarks compare `FlashEvents` with `MediatR v12.5.0` under different scenarios.
