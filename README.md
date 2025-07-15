@@ -1,6 +1,6 @@
 # FlashEvents
 
-[![FlashEvents on NuGet](https://img.shields.io/nuget/v/FlashEvents.svg)](https://www.nuget.org/packages/FlashEvents/)
+[FlashEvents on NuGet](https://www.nuget.org/packages/FlashEvents/)
 
 **FlashEvents** is a high-performance, in-memory event publishing library for .NET designed with simplicity and speed in mind. It enables a robust publish-subscribe pattern where event handlers are executed **in parallel**, and each handler runs within its own isolated **Dependency Injection scope**.
 
