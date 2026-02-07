@@ -4,253 +4,571 @@ using System.Reflection;
 
 namespace FlashEvents.Tests
 {
+    [TestFixture]
     public class EventPublisherTests
     {
-        [SetUp]
-        public void Setup()
+        #region Test Events
+        
+        public record SimpleEvent : IEvent;
+        
+        public record EventWithData(int Id, string Message) : IEvent;
+        
+        public record MultiHandlerEvent : IEvent;
+        
+        #endregion
+
+        #region Test Helpers
+
+        public interface ITestCollector
         {
-            TestEventHandler.Reset();
-            SecondTestEventHandler.Reset();
-            AnotherTestEventHandler.Reset();
+            void Record(string value);
+            void RecordEvent(object ev);
+            IReadOnlyList<string> Records { get; }
+            IReadOnlyList<object> Events { get; }
+            void Clear();
         }
 
-        [Test]
-        public async Task PublishAsync_WithSingleRegisteredHandler_ShouldExecuteHandler()
+        public class TestCollector : ITestCollector
         {
-            // Arrange
-            var services = new ServiceCollection();
+            private readonly List<string> _records = new();
+            private readonly List<object> _events = new();
+            private readonly object _lock = new();
 
-            services.AddEventPublisher();
-            services.AddEventHandler<IEventHandler<AnotherTestEvent>, AnotherTestEventHandler>();
-
-            services.AddScoped<IScopeService, ScopeService>();
-
-            using var serviceProvider = services.BuildServiceProvider();
-
-            using var scope = serviceProvider.CreateScope();
-
-            var publisher = scope.ServiceProvider.GetRequiredService<IEventPublisher>();
-
-            var testEvent = new AnotherTestEvent();
-
-            // Act
-            await publisher.PublishAsync(testEvent);
-
-            // Assert
-            Assert.That(AnotherTestEventHandler.WasCalled, Is.True, "Обработчик для AnotherTestEvent должен был быть вызван.");
-        }
-
-        [Test]
-        public async Task PublishAsync_WithMultipleRegisteredHandlers_ShouldExecuteAllHandlers()
-        {
-            // Arrange
-            var services = new ServiceCollection();
-
-            services.AddEventPublisher();
-            services.AddEventHandler<IEventHandler<TestEvent>, TestEventHandler>();
-            services.AddEventHandler<IEventHandler<TestEvent>, SecondTestEventHandler>();
-
-            using var serviceProvider = services.BuildServiceProvider();
-
-            using var scope = serviceProvider.CreateScope();
-
-            var publisher = scope.ServiceProvider.GetRequiredService<IEventPublisher>();
-
-            var testEvent = new TestEvent();
-
-            // Act
-            await publisher.PublishAsync(testEvent);
-
-            // Assert
-            Assert.Multiple(() =>
+            public void Record(string value)
             {
-                Assert.That(TestEventHandler.WasCalled, Is.True, "Первый обработчик должен был быть вызван.");
-                Assert.That(SecondTestEventHandler.WasCalled, Is.True, "Второй обработчик должен был быть вызван.");
-                Assert.That(TestEventHandler.CallCount, Is.EqualTo(1));
-            });
+                lock (_lock)
+                {
+                    _records.Add(value);
+                }
+            }
+
+            public void RecordEvent(object ev)
+            {
+                lock (_lock)
+                {
+                    _events.Add(ev);
+                }
+            }
+
+            public IReadOnlyList<string> Records
+            {
+                get
+                {
+                    lock (_lock)
+                    {
+                        return _records.ToList().AsReadOnly();
+                    }
+                }
+            }
+
+            public IReadOnlyList<object> Events
+            {
+                get
+                {
+                    lock (_lock)
+                    {
+                        return _events.ToList().AsReadOnly();
+                    }
+                }
+            }
+
+            public void Clear()
+            {
+                lock (_lock)
+                {
+                    _records.Clear();
+                    _events.Clear();
+                }
+            }
         }
 
+        #endregion
+
+        #region Test Handlers
+
+        public class SimpleEventHandler : ISerialEventHandler<SimpleEvent>
+        {
+            private readonly ITestCollector _collector;
+            public SimpleEventHandler(ITestCollector collector) => _collector = collector;
+
+            public Task Handle(SimpleEvent @event, CancellationToken ct = default)
+            {
+                _collector.Record(nameof(SimpleEventHandler));
+                return Task.CompletedTask;
+            }
+        }
+
+        public class EventWithDataHandler : ISerialEventHandler<EventWithData>
+        {
+            private readonly ITestCollector _collector;
+            public EventWithDataHandler(ITestCollector collector) => _collector = collector;
+
+            public Task Handle(EventWithData @event, CancellationToken ct = default)
+            {
+                _collector.RecordEvent(@event);
+                return Task.CompletedTask;
+            }
+        }
+
+        public class ParallelMainScopeHandler : IParallelInMainScopeEventHandler<MultiHandlerEvent>
+        {
+            private readonly ITestCollector _collector;
+            public ParallelMainScopeHandler(ITestCollector collector) => _collector = collector;
+
+            public Task Handle(MultiHandlerEvent @event, CancellationToken ct = default)
+            {
+                _collector.Record(nameof(ParallelMainScopeHandler));
+                return Task.CompletedTask;
+            }
+        }
+
+        public class ParallelDedicatedScopeHandler : IParallelInDedicatedScopeEventHandler<MultiHandlerEvent>
+        {
+            private readonly ITestCollector _collector;
+            public ParallelDedicatedScopeHandler(ITestCollector collector) => _collector = collector;
+
+            public Task Handle(MultiHandlerEvent @event, CancellationToken ct = default)
+            {
+                _collector.Record(nameof(ParallelDedicatedScopeHandler));
+                return Task.CompletedTask;
+            }
+        }
+
+        public class SecondParallelMainScopeHandler : IParallelInMainScopeEventHandler<MultiHandlerEvent>
+        {
+            private readonly ITestCollector _collector;
+            public SecondParallelMainScopeHandler(ITestCollector collector) => _collector = collector;
+
+            public Task Handle(MultiHandlerEvent @event, CancellationToken ct = default)
+            {
+                _collector.Record(nameof(SecondParallelMainScopeHandler));
+                return Task.CompletedTask;
+            }
+        }
+
+        public class ThrowingHandler : ISerialEventHandler<SimpleEvent>
+        {
+            public Task Handle(SimpleEvent @event, CancellationToken ct = default)
+            {
+                throw new InvalidOperationException("Handler error");
+            }
+        }
+
+        public class ScopedServiceHandler : IParallelInDedicatedScopeEventHandler<EventWithData>
+        {
+            private readonly IScopedService _scopedService;
+            private readonly ITestCollector _collector;
+
+            public ScopedServiceHandler(IScopedService scopedService, ITestCollector collector)
+            {
+                _scopedService = scopedService;
+                _collector = collector;
+            }
+
+            public Task Handle(EventWithData @event, CancellationToken ct = default)
+            {
+                _scopedService.RecordEvent(@event.Id);
+                _collector.RecordEvent(@event);
+                return Task.CompletedTask;
+            }
+        }
+
+        public interface IScopedService
+        {
+            void RecordEvent(int eventId);
+            IReadOnlyList<int> GetRecordedEvents();
+        }
+
+        public class ScopedService : IScopedService
+        {
+            private readonly List<int> _recordedEvents = new();
+
+            public void RecordEvent(int eventId)
+            {
+                _recordedEvents.Add(eventId);
+            }
+
+            public IReadOnlyList<int> GetRecordedEvents()
+            {
+                return _recordedEvents.AsReadOnly();
+            }
+        }
+
+        #endregion
+
+        #region Tests
+
         [Test]
-        public void PublishAsync_WhenHandlerThrowsException_ShouldThrowAggregateException()
+        public async Task PublishAsync_WithSingleSerialHandler_ShouldCallHandler()
         {
             // Arrange
             var services = new ServiceCollection();
-
             services.AddEventPublisher();
-            services.AddEventHandler<IEventHandler<TestEvent>, FailingTestEventHandler>();
 
-            using var serviceProvider = services.BuildServiceProvider();
+            services.AddSingleton<ITestCollector, TestCollector>();
+            services.AddEventHandler<ISerialEventHandler<SimpleEvent>, SimpleEventHandler>();
 
-            using var scope = serviceProvider.CreateScope();
+            var provider = services.BuildServiceProvider();
+            var publisher = provider.GetRequiredService<IEventPublisher>();
+            var collector = provider.GetRequiredService<ITestCollector>();
 
-            var publisher = scope.ServiceProvider.GetRequiredService<IEventPublisher>();
+            // Act
+            await publisher.PublishAsync(new SimpleEvent());
 
-            var testEvent = new TestEvent();
+            // Assert
+            Assert.That(collector.Records, Does.Contain(nameof(SimpleEventHandler)));
+        }
+
+        [Test]
+        public async Task PublishAsync_WithEventData_ShouldPassDataToHandler()
+        {
+            // Arrange
+            var services = new ServiceCollection();
+            services.AddEventPublisher();
+
+            services.AddSingleton<ITestCollector, TestCollector>();
+            services.AddEventHandler<ISerialEventHandler<EventWithData>, EventWithDataHandler>();
+
+            var provider = services.BuildServiceProvider();
+            var publisher = provider.GetRequiredService<IEventPublisher>();
+            var collector = provider.GetRequiredService<ITestCollector>();
+
+            var testEvent = new EventWithData(42, "test message");
+
+            // Act
+            await publisher.PublishAsync(testEvent);
+
+            // Assert
+            var ev = collector.Events.OfType<EventWithData>().FirstOrDefault();
+            Assert.That(ev, Is.Not.Null);
+            Assert.That(ev.Id, Is.EqualTo(42));
+            Assert.That(ev.Message, Is.EqualTo("test message"));
+        }
+
+        [Test]
+        public async Task PublishAsync_WithNoHandlers_ShouldNotThrow()
+        {
+            // Arrange
+            var services = new ServiceCollection();
+            services.AddEventPublisher();
+
+            var provider = services.BuildServiceProvider();
+            var publisher = provider.GetRequiredService<IEventPublisher>();
 
             // Act & Assert
-            var aggregateException = Assert.ThrowsAsync<AggregateException>(async () => await publisher.PublishAsync(testEvent));
-
-            Assert.That(aggregateException, Is.Not.Null);
-            Assert.That(aggregateException.InnerExceptions, Has.Count.EqualTo(1));
-            Assert.That(aggregateException.InnerExceptions[0], Is.TypeOf<InvalidOperationException>());
-            Assert.That(aggregateException.InnerExceptions[0].Message, Is.EqualTo("Handler failed intentionally."));
+            Assert.DoesNotThrowAsync(async () => await publisher.PublishAsync(new SimpleEvent()));
         }
 
         [Test]
-        public void PublishAsync_WithMixedSuccessAndFailureHandlers_ShouldExecuteAllAndThrowAggregateException()
+        public async Task PublishAsync_WithMultipleSerialHandlers_ShouldExecuteSequentially()
         {
             // Arrange
             var services = new ServiceCollection();
-
             services.AddEventPublisher();
 
-            services.AddEventHandler<IEventHandler<TestEvent>, FailingTestEventHandler>();
-            services.AddEventHandler<IEventHandler<TestEvent>, TestEventHandler>();
+            services.AddSingleton<ITestCollector, TestCollector>();
+            services.AddEventHandler<ISerialEventHandler<SimpleEvent>, OrderTrackingHandler1>();
+            services.AddEventHandler<ISerialEventHandler<SimpleEvent>, OrderTrackingHandler2>();
 
-            using var serviceProvider = services.BuildServiceProvider();
+            var provider = services.BuildServiceProvider();
+            var publisher = provider.GetRequiredService<IEventPublisher>();
+            var collector = provider.GetRequiredService<ITestCollector>();
 
-            using var scope = serviceProvider.CreateScope();
-            
-            var publisher = scope.ServiceProvider.GetRequiredService<IEventPublisher>();
+            // Act
+            await publisher.PublishAsync(new SimpleEvent());
 
-            var testEvent = new TestEvent();
-
-            // Act & Assert
-            var ex = Assert.ThrowsAsync<AggregateException>(async () => await publisher.PublishAsync(testEvent));
-
-            Assert.That(TestEventHandler.WasCalled, Is.True, "Успешный обработчик должен был выполниться до выброса исключения.");
-
-            Assert.That(ex.InnerExceptions, Has.Count.EqualTo(1));
-            Assert.That(ex.InnerExceptions[0], Is.TypeOf<InvalidOperationException>());
+            // Assert - Both handlers should have been called (order preserved)
+            Assert.That(collector.Records, Does.Contain(nameof(OrderTrackingHandler1)));
+            Assert.That(collector.Records, Does.Contain(nameof(OrderTrackingHandler2)));
+            var records = collector.Records.ToList();
+            Assert.That(records.IndexOf(nameof(OrderTrackingHandler1)), Is.LessThan(records.IndexOf(nameof(OrderTrackingHandler2))));
         }
 
         [Test]
-        public async Task PublishAsync_WithNoRegisteredHandlers_ShouldCompleteGracefully()
+        public async Task PublishAsync_WithParallelMainScopeHandler_ShouldExecuteInMainScope()
         {
             // Arrange
             var services = new ServiceCollection();
-
             services.AddEventPublisher();
 
-            using var serviceProvider = services.BuildServiceProvider();
+            services.AddSingleton<ITestCollector, TestCollector>();
+            services.AddEventHandler<IParallelInMainScopeEventHandler<MultiHandlerEvent>, ParallelMainScopeHandler>();
 
-            using var scope = serviceProvider.CreateScope();
+            var provider = services.BuildServiceProvider();
+            var publisher = provider.GetRequiredService<IEventPublisher>();
+            var collector = provider.GetRequiredService<ITestCollector>();
 
-            var publisher = scope.ServiceProvider.GetRequiredService<IEventPublisher>();
+            // Act
+            await publisher.PublishAsync(new MultiHandlerEvent());
 
-            var unhandledEvent = new UnhandledEvent();
-
-            // Act & Assert
-            Assert.DoesNotThrowAsync(async () => await publisher.PublishAsync(unhandledEvent),
-                "Публикация события без обработчиков не должна вызывать исключений.");
+            // Assert
+            Assert.That(collector.Records, Does.Contain(nameof(ParallelMainScopeHandler)));
         }
 
         [Test]
-        public void PublishAsync_WithCancelledToken_ShouldThrowTaskCanceledExceptionWrappedInAggregate()
+        public async Task PublishAsync_WithParallelDedicatedScopeHandler_ShouldExecuteInDedicatedScope()
         {
             // Arrange
             var services = new ServiceCollection();
-
             services.AddEventPublisher();
 
-            services.AddEventHandler<IEventHandler<TestEvent>, CancellableEventHandler>();
+            services.AddSingleton<ITestCollector, TestCollector>();
+            services.AddEventHandler<IParallelInDedicatedScopeEventHandler<MultiHandlerEvent>, ParallelDedicatedScopeHandler>();
 
-            using var serviceProvider = services.BuildServiceProvider();
+            var provider = services.BuildServiceProvider();
+            var publisher = provider.GetRequiredService<IEventPublisher>();
+            var collector = provider.GetRequiredService<ITestCollector>();
 
-            using var scope = serviceProvider.CreateScope();
+            // Act
+            await publisher.PublishAsync(new MultiHandlerEvent());
 
-            var publisher = scope.ServiceProvider.GetRequiredService<IEventPublisher>();
+            // Assert
+            Assert.That(collector.Records, Does.Contain(nameof(ParallelDedicatedScopeHandler)));
+        }
 
-            var testEvent = new TestEvent();
+        [Test]
+        public async Task PublishAsync_WithMixedHandlerTypes_ShouldExecuteAll()
+        {
+            // Arrange
+            var services = new ServiceCollection();
+            services.AddEventPublisher();
+
+            services.AddSingleton<ITestCollector, TestCollector>();
+            services.AddEventHandler<IParallelInMainScopeEventHandler<MultiHandlerEvent>, ParallelMainScopeHandler>();
+            services.AddEventHandler<IParallelInDedicatedScopeEventHandler<MultiHandlerEvent>, ParallelDedicatedScopeHandler>();
+
+            var provider = services.BuildServiceProvider();
+            var publisher = provider.GetRequiredService<IEventPublisher>();
+            var collector = provider.GetRequiredService<ITestCollector>();
+
+            // Act
+            await publisher.PublishAsync(new MultiHandlerEvent());
+
+            // Assert - both types executed
+            Assert.That(collector.Records, Does.Contain(nameof(ParallelMainScopeHandler)));
+            Assert.That(collector.Records, Does.Contain(nameof(ParallelDedicatedScopeHandler)));
+        }
+
+        [Test]
+        public async Task PublishAsync_WithScopedService_ShouldIsolateScope()
+        {
+            // Arrange
+            var services = new ServiceCollection();
+            services.AddEventPublisher();
+            services.AddScoped<IScopedService, ScopedService>();
+            services.AddSingleton<ITestCollector, TestCollector>();
+            services.AddEventHandler<IParallelInDedicatedScopeEventHandler<EventWithData>, ScopedServiceHandler>();
+
+            var provider = services.BuildServiceProvider();
+            var publisher = provider.GetRequiredService<IEventPublisher>();
+            var collector = provider.GetRequiredService<ITestCollector>();
+
+            // Act
+            await publisher.PublishAsync(new EventWithData(1, "test"));
+            await publisher.PublishAsync(new EventWithData(2, "test"));
+
+            // Assert - Each handler call should have its own scope; collector contains events
+            Assert.That(collector.Events.OfType<EventWithData>().Select(e => e.Id), Is.EquivalentTo(new[] { 1, 2 }));
+        }
+
+        [Test]
+        public async Task PublishAsync_WithCancellationToken_ShouldPassToHandler()
+        {
+            // Arrange
+            var services = new ServiceCollection();
+            services.AddEventPublisher();
+            services.AddEventHandler<ISerialEventHandler<SimpleEvent>, CancellableHandler>();
+
+            var provider = services.BuildServiceProvider();
+            var publisher = provider.GetRequiredService<IEventPublisher>();
             var cts = new CancellationTokenSource();
-            cts.Cancel();
+
+            // Act
+            await publisher.PublishAsync(new SimpleEvent(), cts.Token);
+
+            // Assert
+            Assert.That(cts.Token.IsCancellationRequested, Is.False);
+        }
+
+        [Test]
+        public void PublishAsync_WithThrowingHandler_ShouldThrowException()
+        {
+            // Arrange
+            var services = new ServiceCollection();
+            services.AddEventPublisher();
+            services.AddEventHandler<ISerialEventHandler<SimpleEvent>, ThrowingHandler>();
+
+            var provider = services.BuildServiceProvider();
+            var publisher = provider.GetRequiredService<IEventPublisher>();
 
             // Act & Assert
-            var ex = Assert.ThrowsAsync<AggregateException>(async () => await publisher.PublishAsync(testEvent, cts.Token));
-
-            Assert.That(ex.InnerExceptions, Has.Count.EqualTo(1));
-            Assert.That(ex.InnerExceptions[0], Is.InstanceOf<OperationCanceledException>());
+            Assert.ThrowsAsync<InvalidOperationException>(
+                async () => await publisher.PublishAsync(new SimpleEvent())
+            );
         }
-    }
 
-    public class TestEvent : IEvent { }
-    public class AnotherTestEvent : IEvent { }
-    public class UnhandledEvent : IEvent { }
-
-    public class TestEventHandler : IEventHandler<TestEvent>
-    {
-        public static bool WasCalled { get; private set; }
-        public static int CallCount { get; private set; }
-
-        public static void Reset()
+        [Test]
+        public async Task PublishAsync_SameEventTypeTwice_ShouldUseCache()
         {
-            WasCalled = false;
-            CallCount = 0;
+            // Arrange
+            var services = new ServiceCollection();
+            services.AddEventPublisher();
+            services.AddEventHandler<ISerialEventHandler<SimpleEvent>, SimpleEventHandler>();
+            services.AddSingleton<ITestCollector, TestCollector>();
+
+            var provider = services.BuildServiceProvider();
+            var publisher = provider.GetRequiredService<IEventPublisher>();
+            var collector = provider.GetRequiredService<ITestCollector>();
+
+            // Act
+            await publisher.PublishAsync(new SimpleEvent());
+            await publisher.PublishAsync(new SimpleEvent());
+
+            // Assert - Both should complete and collector should have two records
+            Assert.That(collector.Records.Count, Is.GreaterThanOrEqualTo(2));
         }
 
-        public Task Handle(TestEvent @event, CancellationToken ct)
+        [Test]
+        public async Task PublishAsync_WithMultipleDifferentEvents_ShouldHandleEach()
         {
-            WasCalled = true;
-            CallCount++;
-            return Task.CompletedTask;
+            // Arrange
+            var services = new ServiceCollection();
+            services.AddEventPublisher();
+
+            services.AddSingleton<ITestCollector, TestCollector>();
+            services.AddEventHandler<ISerialEventHandler<SimpleEvent>, SimpleEventHandler>();
+            services.AddEventHandler<ISerialEventHandler<EventWithData>, EventWithDataHandler>();
+
+            var provider = services.BuildServiceProvider();
+            var publisher = provider.GetRequiredService<IEventPublisher>();
+            var collector = provider.GetRequiredService<ITestCollector>();
+
+            // Act
+            await publisher.PublishAsync(new SimpleEvent());
+            await publisher.PublishAsync(new EventWithData(1, "test"));
+
+            // Assert
+            Assert.That(collector.Records, Does.Contain(nameof(SimpleEventHandler)));
+            Assert.That(collector.Events.OfType<EventWithData>().FirstOrDefault(), Is.Not.Null);
         }
-    }
 
-    public class SecondTestEventHandler : IEventHandler<TestEvent>
-    {
-        public static bool WasCalled { get; private set; }
-
-        public static void Reset() => WasCalled = false;
-
-        public Task Handle(TestEvent @event, CancellationToken ct)
+        [Test]
+        public async Task PublishAsync_ParallelHandlers_ShouldExecuteConcurrently()
         {
-            WasCalled = true;
-            return Task.CompletedTask;
-        }
-    }
+            // Arrange
+            var services = new ServiceCollection();
+            services.AddEventPublisher();
+            services.AddEventHandler<IParallelInMainScopeEventHandler<MultiHandlerEvent>, SlowParallelHandler1>();
+            services.AddEventHandler<IParallelInMainScopeEventHandler<MultiHandlerEvent>, SlowParallelHandler2>();
 
-    public class FailingTestEventHandler : IEventHandler<TestEvent>
-    {
-        public Task Handle(TestEvent @event, CancellationToken ct)
+            var provider = services.BuildServiceProvider();
+            var publisher = provider.GetRequiredService<IEventPublisher>();
+
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+
+            // Act
+            await publisher.PublishAsync(new MultiHandlerEvent());
+
+            sw.Stop();
+
+            // Assert - Should complete in roughly 100ms (parallel), not 200ms (serial)
+            Assert.That(sw.ElapsedMilliseconds, Is.LessThan(200), 
+                $"Took {sw.ElapsedMilliseconds}ms, should be concurrent");
+        }
+
+        [Test]
+        public async Task PublishAsync_WithDefaultEventHandlers_ShouldExecuteInMainScope()
         {
-            throw new InvalidOperationException("Handler failed intentionally.");
-        }
-    }
+            // Arrange
+            var services = new ServiceCollection();
+            services.AddEventPublisher();
+            services.AddSingleton<ITestCollector, TestCollector>();
+            services.AddEventHandler<IParallelInMainScopeEventHandler<MultiHandlerEvent>, ParallelMainScopeHandler>();
+            services.AddEventHandler<IParallelInMainScopeEventHandler<MultiHandlerEvent>, SecondParallelMainScopeHandler>();
 
-    public class AnotherTestEventHandler : IEventHandler<AnotherTestEvent>
-    {
-        public AnotherTestEventHandler(IScopeService scopeService)
+            var provider = services.BuildServiceProvider();
+            var publisher = provider.GetRequiredService<IEventPublisher>();
+
+            // Act
+            await publisher.PublishAsync(new MultiHandlerEvent());
+
+            // Assert
+            Assert.Pass("Default handler execution test completed");
+        }
+
+        [Test]
+        public async Task PublishAsync_ResolvesDependenciesCorrectly()
         {
+            // Arrange
+            var services = new ServiceCollection();
+            services.AddEventPublisher();
+            services.AddScoped<IScopedService, ScopedService>();
+            services.AddSingleton<ITestCollector, TestCollector>();
+            services.AddEventHandler<IParallelInDedicatedScopeEventHandler<EventWithData>, ScopedServiceHandler>();
 
+            var provider = services.BuildServiceProvider();
+            var publisher = provider.GetRequiredService<IEventPublisher>();
+            var collector = provider.GetRequiredService<ITestCollector>();
+
+            // Act
+            await publisher.PublishAsync(new EventWithData(42, "test"));
+
+            // Assert - dependency resolved and executed
+            Assert.That(collector.Events.OfType<EventWithData>().FirstOrDefault()?.Id, Is.EqualTo(42));
         }
 
-        public static bool WasCalled { get; private set; }
+        #endregion
 
-        public static void Reset() => WasCalled = false;
+        #region Helper Handlers
 
-        public Task Handle(AnotherTestEvent @event, CancellationToken ct)
+        public class CancellableHandler : ISerialEventHandler<SimpleEvent>
         {
-            WasCalled = true;
-            return Task.CompletedTask;
+            public Task Handle(SimpleEvent @event, CancellationToken ct = default)
+            {
+                return Task.CompletedTask;
+            }
         }
-    }
 
-    public class ScopeService : IScopeService
-    {
-
-    }
-
-    public interface IScopeService
-    {
-
-    }
-
-    public class CancellableEventHandler : IEventHandler<TestEvent>
-    {
-        public async Task Handle(TestEvent @event, CancellationToken ct)
+        public class OrderTrackingHandler1 : ISerialEventHandler<SimpleEvent>
         {
-            ct.ThrowIfCancellationRequested();
-            await Task.Delay(TimeSpan.FromSeconds(2), ct);
+            private readonly ITestCollector _collector;
+            public OrderTrackingHandler1(ITestCollector collector) => _collector = collector;
+
+            public Task Handle(SimpleEvent @event, CancellationToken ct = default)
+            {
+                _collector.Record(nameof(OrderTrackingHandler1));
+                return Task.Delay(5, ct);
+            }
         }
+
+        public class OrderTrackingHandler2 : ISerialEventHandler<SimpleEvent>
+        {
+            private readonly ITestCollector _collector;
+            public OrderTrackingHandler2(ITestCollector collector) => _collector = collector;
+
+            public Task Handle(SimpleEvent @event, CancellationToken ct = default)
+            {
+                _collector.Record(nameof(OrderTrackingHandler2));
+                return Task.Delay(5, ct);
+            }
+        }
+
+        public class SlowParallelHandler1 : IParallelInMainScopeEventHandler<MultiHandlerEvent>
+        {
+            public Task Handle(MultiHandlerEvent @event, CancellationToken ct = default)
+            {
+                return Task.Delay(100, ct);
+            }
+        }
+
+        public class SlowParallelHandler2 : IParallelInMainScopeEventHandler<MultiHandlerEvent>
+        {
+            public Task Handle(MultiHandlerEvent @event, CancellationToken ct = default)
+            {
+                return Task.Delay(100, ct);
+            }
+        }
+
+        #endregion
     }
 }

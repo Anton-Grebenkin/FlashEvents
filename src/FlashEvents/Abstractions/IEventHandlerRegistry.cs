@@ -1,8 +1,7 @@
-﻿
-namespace FlashEvents.Abstractions
+﻿namespace FlashEvents.Abstractions
 {
     internal interface IEventHandlerRegistry
     {
-        IEnumerable<Type> GetHandlerTypesFor<TEvent>() where TEvent : IEvent;
+        ICollection<Type> GetHandlerTypesFor<TEvent>() where TEvent : IEvent;
     }
 }

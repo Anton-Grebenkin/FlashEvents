@@ -11,12 +11,21 @@ namespace FlashEvents
             var registry = EventHandlerRegistry.GetOrCreateRegistry(services);
 
             var handlerTypes = assembly.GetTypes()
-                .Where(t => t.IsClass && !t.IsAbstract && t.GetInterfaces().Any(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IEventHandler<>)));
+                .Where(t => t.IsClass && !t.IsAbstract && t.GetInterfaces().Any(i => 
+                    i.IsGenericType && (
+                        i.GetGenericTypeDefinition() == typeof(ISerialEventHandler<>) ||
+                        i.GetGenericTypeDefinition() == typeof(IParallelInMainScopeEventHandler<>) ||
+                        i.GetGenericTypeDefinition() == typeof(IParallelInDedicatedScopeEventHandler<>)
+                    )));
 
             foreach (var handlerType in handlerTypes)
             {
                 var eventHandlerInterfaces = handlerType.GetInterfaces()
-                    .Where(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IEventHandler<>));
+                    .Where(i => i.IsGenericType && (
+                        i.GetGenericTypeDefinition() == typeof(ISerialEventHandler<>) ||
+                        i.GetGenericTypeDefinition() == typeof(IParallelInMainScopeEventHandler<>) ||
+                        i.GetGenericTypeDefinition() == typeof(IParallelInDedicatedScopeEventHandler<>)
+                    ));
 
                 foreach (var interfaceType in eventHandlerInterfaces)
                 {

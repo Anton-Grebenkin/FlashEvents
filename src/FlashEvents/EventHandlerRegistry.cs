@@ -6,7 +6,8 @@ namespace FlashEvents
     internal class EventHandlerRegistry : IEventHandlerRegistry
     {
         private readonly Dictionary<Type, List<Type>> _handlerMappings = new();
-        internal void RegisterByType(Type eventType, Type handlerType)
+
+        public void RegisterByType(Type eventType, Type handlerType)
         {
             if (!_handlerMappings.TryGetValue(eventType, out var handlerTypes))
             {
@@ -17,17 +18,14 @@ namespace FlashEvents
             handlerTypes.Add(handlerType);
         }
 
-        public IEnumerable<Type> GetHandlerTypesFor<TEvent>() where TEvent : IEvent
+        public ICollection<Type> GetHandlerTypesFor<TEvent>() where TEvent : IEvent
         {
-            if (_handlerMappings.TryGetValue(typeof(TEvent), out var handlerTypes))
-            {
-                return handlerTypes;
-            }
-
-            return Enumerable.Empty<Type>();
+            return _handlerMappings.TryGetValue(typeof(TEvent), out var handlerTypes)
+                ? handlerTypes
+                : Array.Empty<Type>();
         }
 
-        internal static EventHandlerRegistry GetOrCreateRegistry(IServiceCollection services)
+        public static EventHandlerRegistry GetOrCreateRegistry(IServiceCollection services)
         {
             var descriptor = services.FirstOrDefault(d => d.ServiceType == typeof(IEventHandlerRegistry));
 

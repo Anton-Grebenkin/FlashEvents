@@ -10,13 +10,13 @@ namespace PublisherBenchmark
 {
     public class TestEvent : IEvent, INotification { }
 
-    public class CustomHandler : IEventHandler<TestEvent>
+    public class CustomHandler : IParallelInDedicatedScopeEventHandler<TestEvent>
     {
         public async Task Handle(TestEvent @event, CancellationToken ct)
             => await Task.CompletedTask;
     }
 
-    public class CustomHandler2 : IEventHandler<TestEvent>
+    public class CustomHandler2 : IParallelInDedicatedScopeEventHandler<TestEvent>
     {
         public async Task Handle(TestEvent @event, CancellationToken ct)
            => await Task.CompletedTask;
@@ -35,7 +35,7 @@ namespace PublisherBenchmark
     }
 
     [MemoryDiagnoser]
-    [SimpleJob(warmupCount: 1)]
+    [SimpleJob(warmupCount: 3, iterationCount: 5)]
     public class Benchmarks
     {
         private IServiceProvider _customServices;
@@ -48,8 +48,8 @@ namespace PublisherBenchmark
         public void Setup()
         {
             var customServices = new ServiceCollection();
-            customServices.AddEventHandler<IEventHandler<TestEvent>, CustomHandler>();
-            customServices.AddEventHandler<IEventHandler<TestEvent>, CustomHandler2>();
+            customServices.AddEventHandler<IParallelInDedicatedScopeEventHandler<TestEvent>, CustomHandler>();
+            customServices.AddEventHandler<IParallelInDedicatedScopeEventHandler<TestEvent>, CustomHandler2>();
             customServices.AddEventPublisher();
 
             _customServices = customServices.BuildServiceProvider();
