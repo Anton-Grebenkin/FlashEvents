@@ -11,7 +11,7 @@
     <RepositoryUrl>https://github.com/Anton-Grebenkin/FlashEvents</RepositoryUrl>
     <PackageLicenseFile>LICENSE.txt</PackageLicenseFile>
     <Description>FlashEvents is a high-performance, in-memory event publishing library for .NET designed with simplicity and speed in mind. It enables a robust publish-subscribe pattern where event handlers are executed in parallel, and each handler runs within its own isolated Dependency Injection scope.</Description>
-    <Version>2.0.0</Version>
+    <Version>2.0.1</Version>
     <PackageReleaseNotes>fix captive dependency problem</PackageReleaseNotes>
   </PropertyGroup>
 

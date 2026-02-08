@@ -1,4 +1,5 @@
 ﻿using FlashEvents.Abstractions;
+using FlashEvents.Internal;
 using Microsoft.Extensions.DependencyInjection;
 using System.Reflection;
 
@@ -11,7 +12,7 @@ namespace FlashEvents
             var registry = EventHandlerRegistry.GetOrCreateRegistry(services);
 
             var handlerTypes = assembly.GetTypes()
-                .Where(t => t.IsClass && !t.IsAbstract && t.GetInterfaces().Any(i => 
+                .Where(t => t.IsClass && !t.IsAbstract && t.GetInterfaces().Any(i =>
                     i.IsGenericType && (
                         i.GetGenericTypeDefinition() == typeof(ISerialEventHandler<>) ||
                         i.GetGenericTypeDefinition() == typeof(IParallelInMainScopeEventHandler<>) ||
@@ -42,7 +43,9 @@ namespace FlashEvents
         public static IServiceCollection AddEventPublisher(this IServiceCollection services)
         {
             EventHandlerRegistry.GetOrCreateRegistry(services);
-            services.AddSingleton<IEventPublisher, EventPublisher>();
+
+            services.AddSingleton<IHandlerWrapperCache, HandlerWrapperCache>();
+            services.AddScoped<IEventPublisher, EventPublisher>();
 
             return services;
         }

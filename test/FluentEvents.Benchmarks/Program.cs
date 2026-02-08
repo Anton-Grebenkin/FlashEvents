@@ -39,7 +39,6 @@ namespace PublisherBenchmark
     public class Benchmarks
     {
         private IServiceProvider _customServices;
-        private IEventPublisher _customPublisher;
 
         private IServiceProvider _mediatrServices;
         private IMediator _mediator;
@@ -53,7 +52,6 @@ namespace PublisherBenchmark
             customServices.AddEventPublisher();
 
             _customServices = customServices.BuildServiceProvider();
-            _customPublisher = _customServices.GetRequiredService<IEventPublisher>();
 
             var mediatrServices = new ServiceCollection();
             mediatrServices.AddMediatR(cfg =>
@@ -68,7 +66,9 @@ namespace PublisherBenchmark
         [Benchmark(Baseline = true)]
         public async Task FluentEvents_Publish()
         {
-            await _customPublisher.PublishAsync(new TestEvent());
+            using var scope = _customServices.CreateScope();
+            var publisher = scope.ServiceProvider.GetRequiredService<IEventPublisher>();
+            await publisher.PublishAsync(new TestEvent());
         }
 
         [Benchmark]
@@ -84,7 +84,7 @@ namespace PublisherBenchmark
         {
 
             BenchmarkRunner.Run<Benchmarks>();
-           
+
         }
     }
 }

@@ -1,35 +1,25 @@
 ﻿using FlashEvents.Abstractions;
-using System.Collections.Concurrent;
-using Microsoft.Extensions.DependencyInjection;
+using FlashEvents.Internal;
 
 namespace FlashEvents
 {
     internal class EventPublisher : IEventPublisher
     {
         private readonly IServiceProvider _serviceProvider;
-        private readonly ConcurrentDictionary<Type, IHandlerWrapper> _notificationHandlers = new();
+        private readonly IHandlerWrapperCache _handlerWrapperCache;
         private readonly IEventHandlerRegistry _registry;
 
-        public EventPublisher(IServiceProvider serviceProvider, IEventHandlerRegistry registry)
+        public EventPublisher(IServiceProvider serviceProvider, IEventHandlerRegistry registry, IHandlerWrapperCache handlerWrapperCache)
         {
             _serviceProvider = serviceProvider;
             _registry = registry;
+            _handlerWrapperCache = handlerWrapperCache;
         }
 
         public async Task PublishAsync<T>(T notification, CancellationToken ct = default) where T : class, IEvent
         {
-            var handlerWrapper = _notificationHandlers.GetOrAdd(
-                notification.GetType(),
-                static notificationType =>
-                {
-                    var wrapperType = typeof(HandlerWrapper<>).MakeGenericType(notificationType);
-                    var wrapper = Activator.CreateInstance(wrapperType)
-                        ?? throw new InvalidOperationException($"Could not create wrapper for type {notificationType}");
-                    return (IHandlerWrapper)wrapper;
-                });
-
-            await using var scope = _serviceProvider.CreateAsyncScope();
-            await handlerWrapper.Handle(notification, scope.ServiceProvider, _registry, ct);
+            var handlerWrapper = _handlerWrapperCache.GetOrAdd(notification.GetType());
+            await handlerWrapper.Handle(notification, _serviceProvider, _registry, ct);
         }
     }
 }

@@ -87,7 +87,6 @@ namespace FlashEvents.Tests
         #endregion
 
         #region Test Handlers
-
         public class SimpleEventHandler : ISerialEventHandler<SimpleEvent>
         {
             private readonly ITestCollector _collector;
@@ -245,6 +244,7 @@ namespace FlashEvents.Tests
         #endregion
 
         #region Tests
+
         [Test]
         public async Task PublishAsync_WithSingleSerialHandler_ShouldCallHandler()
         {
@@ -256,8 +256,9 @@ namespace FlashEvents.Tests
             services.AddEventHandler<ISerialEventHandler<SimpleEvent>, SimpleEventHandler>();
 
             var provider = services.BuildServiceProvider();
-            var publisher = provider.GetRequiredService<IEventPublisher>();
-            var collector = provider.GetRequiredService<ITestCollector>();
+            using var scope = provider.CreateScope();
+            var publisher = scope.ServiceProvider.GetRequiredService<IEventPublisher>();
+            var collector = scope.ServiceProvider.GetRequiredService<ITestCollector>();
 
             // Act
             await publisher.PublishAsync(new SimpleEvent());
@@ -277,8 +278,9 @@ namespace FlashEvents.Tests
             services.AddEventHandler<ISerialEventHandler<EventWithData>, EventWithDataHandler>();
 
             var provider = services.BuildServiceProvider();
-            var publisher = provider.GetRequiredService<IEventPublisher>();
-            var collector = provider.GetRequiredService<ITestCollector>();
+            using var scope = provider.CreateScope();
+            var publisher = scope.ServiceProvider.GetRequiredService<IEventPublisher>();
+            var collector = scope.ServiceProvider.GetRequiredService<ITestCollector>();
 
             var testEvent = new EventWithData(42, "test message");
 
@@ -300,7 +302,8 @@ namespace FlashEvents.Tests
             services.AddEventPublisher();
 
             var provider = services.BuildServiceProvider();
-            var publisher = provider.GetRequiredService<IEventPublisher>();
+            using var scope = provider.CreateScope();
+            var publisher = scope.ServiceProvider.GetRequiredService<IEventPublisher>();
 
             // Act & Assert
             Assert.DoesNotThrowAsync(async () => await publisher.PublishAsync(new SimpleEvent()));
@@ -318,8 +321,9 @@ namespace FlashEvents.Tests
             services.AddEventHandler<ISerialEventHandler<SimpleEvent>, OrderTrackingHandler2>();
 
             var provider = services.BuildServiceProvider();
-            var publisher = provider.GetRequiredService<IEventPublisher>();
-            var collector = provider.GetRequiredService<ITestCollector>();
+            using var scope = provider.CreateScope();
+            var publisher = scope.ServiceProvider.GetRequiredService<IEventPublisher>();
+            var collector = scope.ServiceProvider.GetRequiredService<ITestCollector>();
 
             // Act
             await publisher.PublishAsync(new SimpleEvent());
@@ -342,8 +346,9 @@ namespace FlashEvents.Tests
             services.AddEventHandler<IParallelInMainScopeEventHandler<MultiHandlerEvent>, ParallelMainScopeHandler>();
 
             var provider = services.BuildServiceProvider();
-            var publisher = provider.GetRequiredService<IEventPublisher>();
-            var collector = provider.GetRequiredService<ITestCollector>();
+            using var scope = provider.CreateScope();
+            var publisher = scope.ServiceProvider.GetRequiredService<IEventPublisher>();
+            var collector = scope.ServiceProvider.GetRequiredService<ITestCollector>();
 
             // Act
             await publisher.PublishAsync(new MultiHandlerEvent());
@@ -363,8 +368,9 @@ namespace FlashEvents.Tests
             services.AddEventHandler<IParallelInDedicatedScopeEventHandler<MultiHandlerEvent>, ParallelDedicatedScopeHandler>();
 
             var provider = services.BuildServiceProvider();
-            var publisher = provider.GetRequiredService<IEventPublisher>();
-            var collector = provider.GetRequiredService<ITestCollector>();
+            using var scope = provider.CreateScope();
+            var publisher = scope.ServiceProvider.GetRequiredService<IEventPublisher>();
+            var collector = scope.ServiceProvider.GetRequiredService<ITestCollector>();
 
             // Act
             await publisher.PublishAsync(new MultiHandlerEvent());
@@ -385,8 +391,9 @@ namespace FlashEvents.Tests
             services.AddEventHandler<IParallelInDedicatedScopeEventHandler<MultiHandlerEvent>, ParallelDedicatedScopeHandler>();
 
             var provider = services.BuildServiceProvider();
-            var publisher = provider.GetRequiredService<IEventPublisher>();
-            var collector = provider.GetRequiredService<ITestCollector>();
+            using var scope = provider.CreateScope();
+            var publisher = scope.ServiceProvider.GetRequiredService<IEventPublisher>();
+            var collector = scope.ServiceProvider.GetRequiredService<ITestCollector>();
 
             // Act
             await publisher.PublishAsync(new MultiHandlerEvent());
@@ -407,8 +414,9 @@ namespace FlashEvents.Tests
             services.AddEventHandler<IParallelInDedicatedScopeEventHandler<EventWithData>, ScopedServiceHandler>();
 
             var provider = services.BuildServiceProvider();
-            var publisher = provider.GetRequiredService<IEventPublisher>();
-            var collector = provider.GetRequiredService<ITestCollector>();
+            using var scope = provider.CreateScope();
+            var publisher = scope.ServiceProvider.GetRequiredService<IEventPublisher>();
+            var collector = scope.ServiceProvider.GetRequiredService<ITestCollector>();
 
             // Act
             await publisher.PublishAsync(new EventWithData(1, "test"));
@@ -427,7 +435,8 @@ namespace FlashEvents.Tests
             services.AddEventHandler<ISerialEventHandler<SimpleEvent>, CancellableHandler>();
 
             var provider = services.BuildServiceProvider();
-            var publisher = provider.GetRequiredService<IEventPublisher>();
+            using var scope = provider.CreateScope();
+            var publisher = scope.ServiceProvider.GetRequiredService<IEventPublisher>();
             var cts = new CancellationTokenSource();
 
             // Act
@@ -446,7 +455,8 @@ namespace FlashEvents.Tests
             services.AddEventHandler<ISerialEventHandler<SimpleEvent>, ThrowingHandler>();
 
             var provider = services.BuildServiceProvider();
-            var publisher = provider.GetRequiredService<IEventPublisher>();
+            using var scope = provider.CreateScope();
+            var publisher = scope.ServiceProvider.GetRequiredService<IEventPublisher>();
 
             // Act & Assert
             Assert.ThrowsAsync<InvalidOperationException>(
@@ -464,8 +474,9 @@ namespace FlashEvents.Tests
             services.AddSingleton<ITestCollector, TestCollector>();
 
             var provider = services.BuildServiceProvider();
-            var publisher = provider.GetRequiredService<IEventPublisher>();
-            var collector = provider.GetRequiredService<ITestCollector>();
+            using var scope = provider.CreateScope();
+            var publisher = scope.ServiceProvider.GetRequiredService<IEventPublisher>();
+            var collector = scope.ServiceProvider.GetRequiredService<ITestCollector>();
 
             // Act
             await publisher.PublishAsync(new SimpleEvent());
@@ -487,8 +498,9 @@ namespace FlashEvents.Tests
             services.AddEventHandler<ISerialEventHandler<EventWithData>, EventWithDataHandler>();
 
             var provider = services.BuildServiceProvider();
-            var publisher = provider.GetRequiredService<IEventPublisher>();
-            var collector = provider.GetRequiredService<ITestCollector>();
+            using var scope = provider.CreateScope();
+            var publisher = scope.ServiceProvider.GetRequiredService<IEventPublisher>();
+            var collector = scope.ServiceProvider.GetRequiredService<ITestCollector>();
 
             // Act
             await publisher.PublishAsync(new SimpleEvent());
@@ -509,7 +521,8 @@ namespace FlashEvents.Tests
             services.AddEventHandler<IParallelInMainScopeEventHandler<MultiHandlerEvent>, SlowParallelHandler2>();
 
             var provider = services.BuildServiceProvider();
-            var publisher = provider.GetRequiredService<IEventPublisher>();
+            using var scope = provider.CreateScope();
+            var publisher = scope.ServiceProvider.GetRequiredService<IEventPublisher>();
 
             var sw = System.Diagnostics.Stopwatch.StartNew();
 
@@ -519,7 +532,7 @@ namespace FlashEvents.Tests
             sw.Stop();
 
             // Assert - Should complete in roughly 100ms (parallel), not 200ms (serial)
-            Assert.That(sw.ElapsedMilliseconds, Is.LessThan(200), 
+            Assert.That(sw.ElapsedMilliseconds, Is.LessThan(200),
                 $"Took {sw.ElapsedMilliseconds}ms, should be concurrent");
         }
 
@@ -534,7 +547,8 @@ namespace FlashEvents.Tests
             services.AddEventHandler<IParallelInMainScopeEventHandler<MultiHandlerEvent>, SecondParallelMainScopeHandler>();
 
             var provider = services.BuildServiceProvider();
-            var publisher = provider.GetRequiredService<IEventPublisher>();
+            using var scope = provider.CreateScope();
+            var publisher = scope.ServiceProvider.GetRequiredService<IEventPublisher>();
 
             // Act
             await publisher.PublishAsync(new MultiHandlerEvent());
@@ -554,8 +568,9 @@ namespace FlashEvents.Tests
             services.AddEventHandler<IParallelInDedicatedScopeEventHandler<EventWithData>, ScopedServiceHandler>();
 
             var provider = services.BuildServiceProvider();
-            var publisher = provider.GetRequiredService<IEventPublisher>();
-            var collector = provider.GetRequiredService<ITestCollector>();
+            using var scope = provider.CreateScope();
+            var publisher = scope.ServiceProvider.GetRequiredService<IEventPublisher>();
+            var collector = scope.ServiceProvider.GetRequiredService<ITestCollector>();
 
             // Act
             await publisher.PublishAsync(new EventWithData(42, "test"));
@@ -567,16 +582,16 @@ namespace FlashEvents.Tests
         [Test]
         public async Task PublishAsync_FromRootProvider_WithScopedDependencyInSerialHandler_ShouldNotThrow()
         {
-            // Regression: IEventPublisher is singleton. Publishing from root provider must still work
-            // when handlers depend on scoped services.
+            // Regression: IEventPublisher is scoped now. Resolve it from a scope.
             var services = new ServiceCollection();
             services.AddEventPublisher();
             services.AddSingleton<ITestCollector, TestCollector>();
             services.AddScoped<IScopedCounter, ScopedCounter>();
             services.AddEventHandler<ISerialEventHandler<ScopedDependencyEvent>, RootScopeSerialScopedDependencyHandler>();
 
-            var provider = services.BuildServiceProvider(); // root provider
-            var publisher = provider.GetRequiredService<IEventPublisher>();
+            var provider = services.BuildServiceProvider();
+            using var scope = provider.CreateScope();
+            var publisher = scope.ServiceProvider.GetRequiredService<IEventPublisher>();
 
             Assert.DoesNotThrowAsync(async () => await publisher.PublishAsync(new ScopedDependencyEvent(1)));
         }
@@ -584,15 +599,16 @@ namespace FlashEvents.Tests
         [Test]
         public async Task PublishAsync_FromRootProvider_WithScopedDependencyInParallelMainHandler_ShouldNotThrow()
         {
-            // Same regression but for ParallelInMainScope (resolved from the main publish scope).
+            // Same regression but for ParallelInMainScope.
             var services = new ServiceCollection();
             services.AddEventPublisher();
             services.AddSingleton<ITestCollector, TestCollector>();
             services.AddScoped<IScopedCounter, ScopedCounter>();
             services.AddEventHandler<IParallelInMainScopeEventHandler<ScopedDependencyEvent>, RootScopeParallelMainScopedDependencyHandler>();
 
-            var provider = services.BuildServiceProvider(); // root provider
-            var publisher = provider.GetRequiredService<IEventPublisher>();
+            var provider = services.BuildServiceProvider();
+            using var scope = provider.CreateScope();
+            var publisher = scope.ServiceProvider.GetRequiredService<IEventPublisher>();
 
             Assert.DoesNotThrowAsync(async () => await publisher.PublishAsync(new ScopedDependencyEvent(1)));
         }
