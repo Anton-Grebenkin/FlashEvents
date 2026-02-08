@@ -8,13 +8,15 @@ namespace FlashEvents.Tests
     public class EventPublisherTests
     {
         #region Test Events
-        
+
         public record SimpleEvent : IEvent;
-        
+
         public record EventWithData(int Id, string Message) : IEvent;
-        
+
         public record MultiHandlerEvent : IEvent;
-        
+
+        public record ScopedDependencyEvent(int Id) : IEvent;
+
         #endregion
 
         #region Test Helpers
@@ -194,10 +196,55 @@ namespace FlashEvents.Tests
             }
         }
 
+        public interface IScopedCounter
+        {
+            int Id { get; }
+        }
+
+        public class ScopedCounter : IScopedCounter
+        {
+            public int Id { get; } = Random.Shared.Next(1, int.MaxValue);
+        }
+
+        public class RootScopeSerialScopedDependencyHandler : ISerialEventHandler<ScopedDependencyEvent>
+        {
+            private readonly IScopedCounter _scoped;
+            private readonly ITestCollector _collector;
+
+            public RootScopeSerialScopedDependencyHandler(IScopedCounter scoped, ITestCollector collector)
+            {
+                _scoped = scoped;
+                _collector = collector;
+            }
+
+            public Task Handle(ScopedDependencyEvent @event, CancellationToken ct = default)
+            {
+                _collector.Record($"{nameof(RootScopeSerialScopedDependencyHandler)}:{_scoped.Id}:{@event.Id}");
+                return Task.CompletedTask;
+            }
+        }
+
+        public class RootScopeParallelMainScopedDependencyHandler : IParallelInMainScopeEventHandler<ScopedDependencyEvent>
+        {
+            private readonly IScopedCounter _scoped;
+            private readonly ITestCollector _collector;
+
+            public RootScopeParallelMainScopedDependencyHandler(IScopedCounter scoped, ITestCollector collector)
+            {
+                _scoped = scoped;
+                _collector = collector;
+            }
+
+            public Task Handle(ScopedDependencyEvent @event, CancellationToken ct = default)
+            {
+                _collector.Record($"{nameof(RootScopeParallelMainScopedDependencyHandler)}:{_scoped.Id}:{@event.Id}");
+                return Task.CompletedTask;
+            }
+        }
+
         #endregion
 
         #region Tests
-
         [Test]
         public async Task PublishAsync_WithSingleSerialHandler_ShouldCallHandler()
         {
@@ -515,6 +562,39 @@ namespace FlashEvents.Tests
 
             // Assert - dependency resolved and executed
             Assert.That(collector.Events.OfType<EventWithData>().FirstOrDefault()?.Id, Is.EqualTo(42));
+        }
+
+        [Test]
+        public async Task PublishAsync_FromRootProvider_WithScopedDependencyInSerialHandler_ShouldNotThrow()
+        {
+            // Regression: IEventPublisher is singleton. Publishing from root provider must still work
+            // when handlers depend on scoped services.
+            var services = new ServiceCollection();
+            services.AddEventPublisher();
+            services.AddSingleton<ITestCollector, TestCollector>();
+            services.AddScoped<IScopedCounter, ScopedCounter>();
+            services.AddEventHandler<ISerialEventHandler<ScopedDependencyEvent>, RootScopeSerialScopedDependencyHandler>();
+
+            var provider = services.BuildServiceProvider(); // root provider
+            var publisher = provider.GetRequiredService<IEventPublisher>();
+
+            Assert.DoesNotThrowAsync(async () => await publisher.PublishAsync(new ScopedDependencyEvent(1)));
+        }
+
+        [Test]
+        public async Task PublishAsync_FromRootProvider_WithScopedDependencyInParallelMainHandler_ShouldNotThrow()
+        {
+            // Same regression but for ParallelInMainScope (resolved from the main publish scope).
+            var services = new ServiceCollection();
+            services.AddEventPublisher();
+            services.AddSingleton<ITestCollector, TestCollector>();
+            services.AddScoped<IScopedCounter, ScopedCounter>();
+            services.AddEventHandler<IParallelInMainScopeEventHandler<ScopedDependencyEvent>, RootScopeParallelMainScopedDependencyHandler>();
+
+            var provider = services.BuildServiceProvider(); // root provider
+            var publisher = provider.GetRequiredService<IEventPublisher>();
+
+            Assert.DoesNotThrowAsync(async () => await publisher.PublishAsync(new ScopedDependencyEvent(1)));
         }
 
         #endregion

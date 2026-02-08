@@ -10,13 +10,13 @@ namespace PublisherBenchmark
 {
     public class TestEvent : IEvent, INotification { }
 
-    public class CustomHandler : IParallelInDedicatedScopeEventHandler<TestEvent>
+    public class CustomHandler : ISerialEventHandler<TestEvent>
     {
         public async Task Handle(TestEvent @event, CancellationToken ct)
             => await Task.CompletedTask;
     }
 
-    public class CustomHandler2 : IParallelInDedicatedScopeEventHandler<TestEvent>
+    public class CustomHandler2 : ISerialEventHandler<TestEvent>
     {
         public async Task Handle(TestEvent @event, CancellationToken ct)
            => await Task.CompletedTask;
@@ -48,8 +48,8 @@ namespace PublisherBenchmark
         public void Setup()
         {
             var customServices = new ServiceCollection();
-            customServices.AddEventHandler<IParallelInDedicatedScopeEventHandler<TestEvent>, CustomHandler>();
-            customServices.AddEventHandler<IParallelInDedicatedScopeEventHandler<TestEvent>, CustomHandler2>();
+            customServices.AddEventHandler<ISerialEventHandler<TestEvent>, CustomHandler>();
+            customServices.AddEventHandler<ISerialEventHandler<TestEvent>, CustomHandler2>();
             customServices.AddEventPublisher();
 
             _customServices = customServices.BuildServiceProvider();
@@ -59,7 +59,7 @@ namespace PublisherBenchmark
             mediatrServices.AddMediatR(cfg =>
             {
                 cfg.RegisterServicesFromAssembly(typeof(Benchmarks).Assembly);
-                cfg.NotificationPublisher = new TaskWhenAllPublisher();
+                //cfg.NotificationPublisher = new TaskWhenAllPublisher();
             });
             _mediatrServices = mediatrServices.BuildServiceProvider();
             _mediator = _mediatrServices.GetRequiredService<IMediator>();

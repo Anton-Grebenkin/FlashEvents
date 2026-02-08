@@ -1,5 +1,6 @@
 ﻿using FlashEvents.Abstractions;
 using System.Collections.Concurrent;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace FlashEvents
 {
@@ -27,7 +28,8 @@ namespace FlashEvents
                     return (IHandlerWrapper)wrapper;
                 });
 
-            await handlerWrapper.Handle(notification, _serviceProvider, _registry, ct);
+            await using var scope = _serviceProvider.CreateAsyncScope();
+            await handlerWrapper.Handle(notification, scope.ServiceProvider, _registry, ct);
         }
     }
 }
