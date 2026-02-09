@@ -16,7 +16,8 @@ namespace FlashEvents
                     i.IsGenericType && (
                         i.GetGenericTypeDefinition() == typeof(ISerialEventHandler<>) ||
                         i.GetGenericTypeDefinition() == typeof(IParallelInMainScopeEventHandler<>) ||
-                        i.GetGenericTypeDefinition() == typeof(IParallelInDedicatedScopeEventHandler<>)
+                        i.GetGenericTypeDefinition() == typeof(IParallelInDedicatedScopeEventHandler<>) ||
+                        i.GetGenericTypeDefinition() == typeof(IChannelEventHandler<>)
                     )));
 
             foreach (var handlerType in handlerTypes)
@@ -25,7 +26,8 @@ namespace FlashEvents
                     .Where(i => i.IsGenericType && (
                         i.GetGenericTypeDefinition() == typeof(ISerialEventHandler<>) ||
                         i.GetGenericTypeDefinition() == typeof(IParallelInMainScopeEventHandler<>) ||
-                        i.GetGenericTypeDefinition() == typeof(IParallelInDedicatedScopeEventHandler<>)
+                        i.GetGenericTypeDefinition() == typeof(IParallelInDedicatedScopeEventHandler<>) ||
+                        i.GetGenericTypeDefinition() == typeof(IChannelEventHandler<>)
                     ));
 
                 foreach (var interfaceType in eventHandlerInterfaces)
@@ -45,6 +47,7 @@ namespace FlashEvents
             EventHandlerRegistry.GetOrCreateRegistry(services);
 
             services.AddSingleton<IHandlerWrapperCache, HandlerWrapperCache>();
+            services.AddSingleton<IChannelDispatcher, ChannelDispatcher>();
             services.AddScoped<IEventPublisher, EventPublisher>();
 
             return services;

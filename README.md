@@ -2,19 +2,19 @@
 
 [FlashEvents on NuGet](https://www.nuget.org/packages/FlashEvents/)
 
-**FlashEvents** is a high-performance, in-memory event publishing library for .NET designed with simplicity and speed in mind. It provides flexible execution strategies through three distinct handler interfaces, allowing you to choose the optimal approach for each use case.
+**FlashEvents** is a high-performance, in-memory event publishing library for .NET designed with simplicity and speed in mind. It provides flexible execution strategies through distinct handler interfaces, allowing you to choose the optimal approach for each use case.
 
 ## Key Features
 
 *   🚀 **Blazing Fast Performance**: Optimized for low-latency and minimal memory allocations. Consistently outperforms MediatR in both speed and memory usage.
-*   ⚡ **Flexible Execution Strategies**: Choose between serial, parallel in main scope, or parallel in dedicated scope execution based on your needs.
+*   ⚡ **Flexible Execution Strategies**: Choose between serial, parallel in main scope, parallel in dedicated scope, or channel-based execution.
 *   🛡️ **Built-in Scope Isolation**: Dedicated scope handlers automatically run in isolated `IServiceScope`, preventing shared state issues with scoped services like `DbContext`.
 *   🔧 **Simple & Fluent API**: Easy to set up and use with clean dependency injection extensions.
 *   🔍 **Automatic Handler Discovery**: Register all your event handlers from an assembly with a single line of code.
 
 ## Handler Types
 
-FlashEvents provides three handler interfaces, each with specific execution characteristics:
+FlashEvents provides handler interfaces, each with specific execution characteristics:
 
 ### `ISerialEventHandler<TEvent>`
 Handlers execute **sequentially**, one after another, in the main scope. Use when:
@@ -34,9 +34,22 @@ Handlers execute **in parallel**, each in its own isolated `IServiceScope`. Use 
 - You want maximum isolation between handlers
 - Each handler represents an independent unit of work
 
-**Execution Flow:**
+### `IChannelEventHandler<TEvent>`
+Handlers execute via an internal **channel/queue** (per handler). Publishing enqueues the event for that handler and returns when the enqueue completes.
+
+Use when:
+- You want backpressure/decoupling between publisher throughput and handler work
+- A handler is slow/variable and you don't want it to block the publish path
+- You want single-threaded (FIFO) processing per handler
+
+Notes:
+- Ordering is preserved **within a single channel handler**.
+- Channel handlers run independently from serial/parallel handlers.
+
+**Execution Flow (high level):**
 1. All `ISerialEventHandler` instances execute sequentially first
 2. Then all `IParallelInMainScopeEventHandler` and `IParallelInDedicatedScopeEventHandler` instances execute concurrently via `Task.WhenAll`
+3. `IChannelEventHandler` instances receive events through their channels (enqueue on publish, process asynchronously)
 
 ## Getting Started
 
@@ -113,6 +126,16 @@ public class SaveAuditLogHandler : IParallelInDedicatedScopeEventHandler<OrderCr
         await _dbContext.SaveChangesAsync(ct);
     }
 }
+
+// Channel handler: enqueue on publish, process asynchronously (FIFO per handler)
+public class SlowIntegrationHandler : IChannelEventHandler<OrderCreatedEvent>
+{
+    public async Task Handle(OrderCreatedEvent @event, CancellationToken ct)
+    {
+        // Call slow external service without blocking the publisher's critical path
+        await Task.Delay(250, ct);
+    }
+}
 ```
 
 ### 3\. Configure Dependency Injection
@@ -132,6 +155,7 @@ builder.Services.AddEventHandlersFromAssembly(Assembly.GetExecutingAssembly());
 // Or register handlers manually
 // builder.Services.AddEventHandler<ISerialEventHandler<OrderCreatedEvent>, ValidateOrderHandler>();
 // builder.Services.AddEventHandler<IParallelInMainScopeEventHandler<OrderCreatedEvent>, SendEmailHandler>();
+// builder.Services.AddEventHandler<IChannelEventHandler<OrderCreatedEvent>, SlowIntegrationHandler>();
 
 var app = builder.Build();
 ```
@@ -233,6 +257,6 @@ FlashEvents consistently demonstrates superior memory efficiency across all scen
 - **Explicit execution strategies** through distinct handler interfaces
 - **Built-in scope isolation** for handlers that need it
 - **Predictable execution flow** with serial handlers running before parallel ones
-- **Zero-configuration parallelism** with automatic `Task.WhenAll` orchestration
+- **Channel-based handler execution** for queued/background processing
 
 Choose FlashEvents when you need a lightweight, performant event system with flexible execution strategies and built-in best practices for scope management.

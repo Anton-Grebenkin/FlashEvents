@@ -17,6 +17,8 @@ namespace FlashEvents.Tests
 
         public record ScopedDependencyEvent(int Id) : IEvent;
 
+        public record ChannelEvent(int Id) : IEvent;
+
         #endregion
 
         #region Test Helpers
@@ -170,6 +172,30 @@ namespace FlashEvents.Tests
             {
                 _scopedService.RecordEvent(@event.Id);
                 _collector.RecordEvent(@event);
+                return Task.CompletedTask;
+            }
+        }
+
+        public class ChannelHandler1 : IChannelEventHandler<ChannelEvent>
+        {
+            private readonly ITestCollector _collector;
+            public ChannelHandler1(ITestCollector collector) => _collector = collector;
+
+            public Task Handle(ChannelEvent @event, CancellationToken ct = default)
+            {
+                _collector.Record($"{nameof(ChannelHandler1)}:{@event.Id}");
+                return Task.CompletedTask;
+            }
+        }
+
+        public class ChannelHandler2 : IChannelEventHandler<ChannelEvent>
+        {
+            private readonly ITestCollector _collector;
+            public ChannelHandler2(ITestCollector collector) => _collector = collector;
+
+            public Task Handle(ChannelEvent @event, CancellationToken ct = default)
+            {
+                _collector.Record($"{nameof(ChannelHandler2)}:{@event.Id}");
                 return Task.CompletedTask;
             }
         }
@@ -611,6 +637,36 @@ namespace FlashEvents.Tests
             var publisher = scope.ServiceProvider.GetRequiredService<IEventPublisher>();
 
             Assert.DoesNotThrowAsync(async () => await publisher.PublishAsync(new ScopedDependencyEvent(1)));
+        }
+
+        [Test]
+        public async Task PublishAsync_WithChannelHandlers_ShouldEnqueueAndExecuteAsync()
+        {
+            var services = new ServiceCollection();
+            services.AddEventPublisher();
+            services.AddSingleton<ITestCollector, TestCollector>();
+            services.AddEventHandler<IChannelEventHandler<ChannelEvent>, ChannelHandler1>();
+            services.AddEventHandler<IChannelEventHandler<ChannelEvent>, ChannelHandler2>();
+
+            var provider = services.BuildServiceProvider();
+            using var scope = provider.CreateScope();
+            var publisher = scope.ServiceProvider.GetRequiredService<IEventPublisher>();
+            var collector = scope.ServiceProvider.GetRequiredService<ITestCollector>();
+
+            await publisher.PublishAsync(new ChannelEvent(7));
+
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            while (sw.ElapsedMilliseconds < 500)
+            {
+                var records = collector.Records;
+                if (records.Contains($"{nameof(ChannelHandler1)}:7") && records.Contains($"{nameof(ChannelHandler2)}:7"))
+                    break;
+
+                await Task.Delay(10);
+            }
+
+            Assert.That(collector.Records, Does.Contain($"{nameof(ChannelHandler1)}:7"));
+            Assert.That(collector.Records, Does.Contain($"{nameof(ChannelHandler2)}:7"));
         }
 
         #endregion
