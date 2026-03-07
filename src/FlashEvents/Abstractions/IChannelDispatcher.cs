@@ -1,6 +1,4 @@
-using FlashEvents.Abstractions;
-
-namespace FlashEvents.Internal;
+namespace FlashEvents.Abstractions;
 
 internal interface IChannelDispatcher
 {

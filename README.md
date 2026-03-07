@@ -193,6 +193,40 @@ public class OrdersController : ControllerBase
 }
 ```
 
+## Observability
+
+### Metrics
+
+FlashEvents exposes built-in metrics via [`System.Diagnostics.Metrics`](https://learn.microsoft.com/en-us/dotnet/core/diagnostics/metrics) under the **`FlashEvents`** meter name. Metrics are collected automatically — no additional configuration is required.
+
+If your application registers an `IMeterFactory` (e.g., via `builder.Services.AddMetrics()` in ASP.NET Core), FlashEvents will use it for proper DI integration and testability.
+
+#### Available Instruments
+
+| Instrument | Type | Unit | Tags | Description |
+|---|---|---|---|---|
+| `flashevents.publish.events` | Counter | `{event}` | `event.type` | Total number of successfully published events. |
+| `flashevents.publish.duration` | Histogram | `ms` | `event.type` | End-to-end duration of `PublishAsync`, including all handler execution. |
+| `flashevents.handler.duration` | Histogram | `ms` | `event.type`, `handler.type` | Execution duration of each individual handler. |
+| `flashevents.handler.errors` | Counter | `{error}` | `event.type`, `handler.type` | Number of handler execution failures (exceptions). |
+| `flashevents.channel.queue_size` | UpDownCounter | `{event}` | `event.type` | Current number of events waiting in channel queues. A growing value indicates handlers are not keeping up with the publishing rate. |
+
+#### Usage with OpenTelemetry
+
+```csharp
+builder.Services.AddOpenTelemetry()
+    .WithMetrics(metrics =>
+    {
+        metrics.AddMeter("FlashEvents");
+    });
+```
+
+#### Usage with dotnet-counters
+
+```bash
+dotnet counters monitor --counters FlashEvents
+```
+
 ## ⚠️ Important Note: Handler Caching
 
 For maximum performance, **FlashEvents caches the list of handler types for each event type upon its first publication**.

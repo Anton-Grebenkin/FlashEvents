@@ -48,6 +48,7 @@ namespace FlashEvents
 
             services.AddSingleton<IHandlerWrapperCache, HandlerWrapperCache>();
             services.AddSingleton<IChannelDispatcher, ChannelDispatcher>();
+            services.AddSingleton<FlashEventsMetrics>();
             services.AddScoped<IEventPublisher, EventPublisher>();
 
             return services;

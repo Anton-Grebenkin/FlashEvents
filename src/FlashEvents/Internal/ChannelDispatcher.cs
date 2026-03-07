@@ -2,6 +2,7 @@ using FlashEvents.Abstractions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Threading.Channels;
 
 namespace FlashEvents.Internal;
@@ -22,8 +23,7 @@ internal sealed class ChannelDispatcher : IChannelDispatcher, IAsyncDisposable
 
         var processor = _processors.GetOrAdd(eventType, _ =>
         {
-            if (_logger?.IsEnabled(LogLevel.Debug) == true)
-                _logger.LogDebug("Creating channel processor for event type {EventType}.", eventType);
+            _logger?.CreatingChannelProcessor(eventType);
 
             var p = (IEventChannelProcessor)Activator.CreateInstance(
                 typeof(EventChannelProcessor<>).MakeGenericType(eventType), serviceProvider, registry)!;
@@ -31,16 +31,14 @@ internal sealed class ChannelDispatcher : IChannelDispatcher, IAsyncDisposable
             return p;
         });
 
-        if (_logger?.IsEnabled(LogLevel.Trace) == true)
-            _logger.LogTrace("Enqueuing channel event {EventType}.", eventType);
+        _logger?.EnqueuingChannelEvent(eventType);
 
         return processor.EnqueueAsync(@event, ct);
     }
 
     public async ValueTask DisposeAsync()
     {
-        if (_logger?.IsEnabled(LogLevel.Debug) == true)
-            _logger.LogDebug("Disposing ChannelDispatcher with {ProcessorCount} processors.", _processors.Count);
+        _logger?.DisposingChannelDispatcher(_processors.Count);
 
         foreach (var p in _processors.Values)
         {
@@ -61,6 +59,7 @@ internal sealed class ChannelDispatcher : IChannelDispatcher, IAsyncDisposable
         private readonly IServiceProvider _rootServiceProvider;
         private readonly IEventHandlerRegistry _registry;
         private readonly ILogger? _logger;
+        private readonly FlashEventsMetrics? _metrics;
 
         private readonly Channel<TEvent> _channel = Channel.CreateUnbounded<TEvent>(new UnboundedChannelOptions
         {
@@ -78,6 +77,7 @@ internal sealed class ChannelDispatcher : IChannelDispatcher, IAsyncDisposable
             _registry = registry;
 
             _logger = rootServiceProvider.GetService<ILoggerFactory>()?.CreateLogger("FlashEvents.Channel");
+            _metrics = rootServiceProvider.GetService<FlashEventsMetrics>();
         }
 
         public void Start()
@@ -85,18 +85,19 @@ internal sealed class ChannelDispatcher : IChannelDispatcher, IAsyncDisposable
             if (_reader is not null)
                 return;
 
-            _logger?.LogDebug("Starting channel reader for event type {EventType}.", typeof(TEvent));
+            _logger?.ChannelReaderStarted(typeof(TEvent));
 
             _cts = new CancellationTokenSource();
             _reader = Task.Run(() => ReadLoopAsync(_cts.Token));
         }
 
-        public ValueTask EnqueueAsync(IEvent @event, CancellationToken ct)
+        public async ValueTask EnqueueAsync(IEvent @event, CancellationToken ct)
         {
             if (@event is not TEvent typed)
                 throw new ArgumentException($"Invalid event type. Expected {typeof(TEvent)}, got {@event.GetType()}.");
 
-            return _channel.Writer.WriteAsync(typed, ct);
+            await _channel.Writer.WriteAsync(typed, ct).ConfigureAwait(false);
+            _metrics?.ChannelEventEnqueued(typeof(TEvent).Name);
         }
 
         private async Task ReadLoopAsync(CancellationToken ct)
@@ -107,6 +108,7 @@ internal sealed class ChannelDispatcher : IChannelDispatcher, IAsyncDisposable
                 {
                     while (_channel.Reader.TryRead(out var ev))
                     {
+                        _metrics?.ChannelEventDequeued(typeof(TEvent).Name);
                         try
                         {
                             await ProcessEventAsync(ev, ct).ConfigureAwait(false);
@@ -117,7 +119,7 @@ internal sealed class ChannelDispatcher : IChannelDispatcher, IAsyncDisposable
                         }
                         catch (Exception ex)
                         {
-                            _logger?.LogError(ex, "Unhandled exception while processing channel event {EventType}. Processing will continue.", typeof(TEvent));
+                            _logger?.ChannelEventProcessingFailed(ex, typeof(TEvent));
                         }
                     }
                 }
@@ -128,11 +130,11 @@ internal sealed class ChannelDispatcher : IChannelDispatcher, IAsyncDisposable
             }
             catch (Exception ex)
             {
-                _logger?.LogError(ex, "Channel read loop crashed for event type {EventType}.", typeof(TEvent));
+                _logger?.ChannelReadLoopCrashed(ex, typeof(TEvent));
             }
             finally
             {
-                _logger?.LogDebug("Channel reader stopped for event type {EventType}.", typeof(TEvent));
+                _logger?.ChannelReaderStopped(typeof(TEvent));
             }
         }
 
@@ -142,13 +144,11 @@ internal sealed class ChannelDispatcher : IChannelDispatcher, IAsyncDisposable
             var count = channelHandlerTypes.Count;
             if (count == 0)
             {
-                if (_logger?.IsEnabled(LogLevel.Trace) == true)
-                    _logger.LogTrace("No channel handlers registered for event type {EventType}.", typeof(TEvent));
+                _logger?.NoChannelHandlersRegistered(typeof(TEvent));
                 return;
             }
 
-            if (_logger?.IsEnabled(LogLevel.Trace) == true)
-                _logger.LogTrace("Processing channel event {EventType} with {HandlerCount} handlers.", typeof(TEvent), count);
+            _logger?.ProcessingChannelEvent(typeof(TEvent), count);
 
             var tasks = new Task[count];
             var i = 0;
@@ -162,16 +162,21 @@ internal sealed class ChannelDispatcher : IChannelDispatcher, IAsyncDisposable
 
         private async Task ProcessHandlerAndLogAsync(Type handlerType, TEvent ev, CancellationToken ct)
         {
+            var startTimestamp = Stopwatch.GetTimestamp();
             try
             {
                 await ProcessHandlerInDedicatedScopeAsync(handlerType, ev, ct).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
-                _logger?.LogError(ex,
-                    "Exception in channel handler {HandlerType} for event {EventType}.",
-                    handlerType,
-                    typeof(TEvent));
+                _metrics?.HandlerError(typeof(TEvent).Name, handlerType.Name);
+                _logger?.ChannelHandlerFailed(ex, handlerType, typeof(TEvent));
+            }
+            finally
+            {
+                _metrics?.RecordHandlerDuration(
+                    Stopwatch.GetElapsedTime(startTimestamp).TotalMilliseconds,
+                    typeof(TEvent).Name, handlerType.Name);
             }
         }
 
@@ -189,7 +194,7 @@ internal sealed class ChannelDispatcher : IChannelDispatcher, IAsyncDisposable
 
             try
             {
-                _logger?.LogDebug("Disposing channel processor for event type {EventType}.", typeof(TEvent));
+                _logger?.DisposingChannelProcessor(typeof(TEvent));
 
                 _channel.Writer.TryComplete();
                 _cts.Cancel();
@@ -197,8 +202,9 @@ internal sealed class ChannelDispatcher : IChannelDispatcher, IAsyncDisposable
                 if (_reader is not null)
                     await _reader.ConfigureAwait(false);
             }
-            catch
+            catch (Exception ex)
             {
+                _logger?.ChannelProcessorDisposeFailed(ex, typeof(TEvent));
             }
             finally
             {

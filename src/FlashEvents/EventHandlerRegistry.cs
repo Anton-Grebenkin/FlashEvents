@@ -1,4 +1,5 @@
 ﻿using FlashEvents.Abstractions;
+using FlashEvents.Internal;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -24,8 +25,7 @@ namespace FlashEvents
 
             handlerTypes.Add(handlerType);
 
-            if (_logger?.IsEnabled(LogLevel.Debug) == true)
-                _logger.LogDebug("Registered handler {HandlerType} for event {EventType}.", handlerType, eventType);
+            _logger?.HandlerRegistered(handlerType, eventType);
         }
 
         public ICollection<Type> GetHandlerTypesFor<TEvent>() where TEvent : IEvent

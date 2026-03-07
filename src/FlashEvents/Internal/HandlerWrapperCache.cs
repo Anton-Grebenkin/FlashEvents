@@ -36,13 +36,13 @@ namespace FlashEvents.Internal
                     }
                     catch (Exception ex)
                     {
-                        _logger?.LogError(ex, "Failed to create handler wrapper for event type {EventType}.", notificationType);
+                        _logger?.HandlerWrapperCreationFailed(ex, notificationType);
                         throw;
                     }
                 });
 
-            if (added && _logger?.IsEnabled(LogLevel.Debug) == true)
-                _logger.LogDebug("Created handler wrapper for event type {EventType}.", eventType);
+            if (added)
+                _logger?.HandlerWrapperCreated(eventType);
 
             return wrapper;
         }
